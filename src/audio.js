@@ -434,7 +434,17 @@ const K = {
   deep:    { kick:'9...9...9...9...', rim:'..........4.....', hat:'....3.......3...' },
   trap:    { kick:'9.....9...9.....', snare:'........9.......', hat:'4.4.4.4.4.4.4.4.' },
   march:   { kick:'8...8...8...8...', snare:'..4...4...4...4.' },
-  sparse:  { kick:'7.......5.......' }
+  sparse:  { kick:'7.......5.......' },
+  // Amen-ish break: kick, snare on 5 and 13, ghost notes between.
+  breaks:  { kick:'9.....9.........', snare:'....9.....3.9...', hat:'..4.4.4.4.4.4.4.' },
+  dnb:     { kick:'9.........9.....', snare:'....9.......9...', hat:'..4.5.4.5.4.5.4.', open:'..............6.' },
+  twostep: { kick:'9.......9...9...', snare:'....9.......9...', hat:'.5.4.5..5.4.5.4.' },
+  techno:  { kick:'9...9...9...9...', hat:'..6...6...6...6.', open:'......7.......7.', rim:'..........5.....' },
+  bigroom: { kick:'9...9...9...9...', snare:'....8.......8...', hat:'..5.5.5.5.5.5.5.', open:'..............8.' },
+  trap:    { kick:'9.....9...9.....', snare:'........9.......', hat:'5.5.5.55.5.5.555' },
+  hard:    { kick:'9...9...9...9...', hat:'..5...5...5...5.', rim:'....6.......6...' },
+  bigbeat: { kick:'9...9.....9.....', snare:'....9.......9...', hat:'..5..5..5..5..5.' },
+  retro:   { kick:'9...9...9...9...', snare:'....9.......9...', hat:'..4.4.4.4.4.4.4.' }
 };
 
 /* Every piece is this template with a handful of fields overridden.
@@ -877,7 +887,110 @@ export const SCENES = [
     cueEvery:3, breath:8 }),
   S('abyssal','Abyssal','As low as it goes', { root:32.7, scale:'majorPent', step:bpm(32),
     droneGain:0.20, cutoff:170, noiseGain:0.045, revSec:9.0, revMix:0.78,
-    calm:true, cueEvery:3, breath:8 })
+    calm:true, cueEvery:3, breath:8 }),
+
+  /* ═══ more electronic ══════════════════════════════════════
+     Bass is where these genuinely differ — a Reese, a wobble, a
+     303 and an 808 do not sound like one another however you
+     arrange the drums — so each of these names its voice.      */
+
+  S('liquid','Liquid','Rolling drum and bass, Reese underneath', { root:55, scale:'aeolian', step:bpm(174),
+    sub:true, sidechain:0.55, bassType:'reese', bassLen:3.2,
+    prog:'anthem', chordEvery:16, chordVoices:7, chordDetune:13, chordLevel:0.042,
+    bass:'0.......0.......', drums:K.dnb, pluckOct:24, pluckChance:0.35,
+    droneGain:0.045, cutoff:520, revSec:4.2, revMix:0.50 }),
+
+  S('neurofunk','Neurofunk','Darker breaks, growling low end', { root:49, scale:'aeolian', step:bpm(174),
+    sub:true, sidechain:0.62, bassType:'reese', bassLen:2.0,
+    prog:'open', chordEvery:32, chordVoices:5, chordDetune:9, chordLevel:0.032,
+    bass:'0...0...0...0...', drums:K.breaks, pluckChance:0.2,
+    droneGain:0.06, droneType:'sawtooth', cutoff:340, revSec:2.6, revMix:0.32 }),
+
+  S('riddim','Riddim','Half-time wobble, heavy and mechanical', { root:41.2, scale:'aeolian', step:bpm(140),
+    sub:true, sidechain:0.70, bassType:'wobble', wobble:2, bassLen:3.6,
+    bass:'0.......0.......', drums:K.half, pluckChance:0.15, pluckOct:24,
+    droneGain:0.035, cutoff:300, revSec:2.2, revMix:0.26 }),
+
+  S('chasm','Chasm','Melodic dubstep — huge chords over half-time', { root:49, scale:'aeolian', step:bpm(140),
+    sub:true, sidechain:0.80, bassType:'wobble', wobble:4, bassLen:3.6,
+    prog:'anthem', chordEvery:4, chordVoices:7, chordDetune:24, chordWobble:true,
+    chordLevel:0.052, bass:'0.......0.......', riserEvery:64, drums:K.half,
+    droneGain:0.04, cutoff:520, revSec:4.4, revMix:0.52 }),
+
+  S('acid','Acid','Rolling 303 line, psytrance tempo', { root:49, scale:'aeolian', step:bpm(145),
+    sub:true, sidechain:0.78, bassType:'acid', bassLen:0.9,
+    bass:'0.00.0.00.00.0.0', drums:K.techno, pluckEvery:4, pluckChance:0.3,
+    pluckWave:'square', pluckDecay:0.2, pluckOct:24,
+    droneGain:0.04, droneType:'sawtooth', cutoff:420, lfo:0.11, revSec:2.4, revMix:0.30 }),
+
+  S('gate','Trance Gate','Gated chords and a driving four', { root:73.4, scale:'major', step:bpm(138),
+    sub:true, sidechain:0.82, bassType:'sub',
+    prog:'lift', chordEvery:1, chordVoices:7, chordDetune:16, chordLevel:0.040,
+    bass:'0.0.0.0.0.0.0.0.', riserEvery:64, drums:K.four,
+    droneGain:0.03, cutoff:460, revSec:3.0, revMix:0.38, pluckChance:0 }),
+
+  S('garage','Garage','Two-step shuffle, clipped and bright', { root:65.4, scale:'dorian', step:bpm(132),
+    swing:0.22, sub:true, sidechain:0.58, bassType:'sub', bassLen:1.0,
+    prog:'wide', chordEvery:8, chordVoices:5, chordDetune:11, chordLevel:0.044,
+    bass:'0..0..0...0..0..', drums:K.twostep, pluckOct:24, pluckChance:0.5,
+    droneGain:0.04, cutoff:620, revSec:3.0, revMix:0.40 }),
+
+  S('techhouse','Tech House','Groovy, percussive, endless', { root:61.7, scale:'dorian', step:bpm(126),
+    sub:true, sidechain:0.68, bassType:'sub', bassLen:0.9,
+    prog:'open', chordEvery:16, chordVoices:5, chordDetune:8, chordLevel:0.034,
+    bass:'..0...0...0...0.', drums:K.techno, pluckEvery:4, pluckChance:0.45,
+    pluckWave:'square', pluckDecay:0.22, droneGain:0.05, cutoff:400, revSec:2.2, revMix:0.28 }),
+
+  S('futurehouse','Future House','Filtered stabs on the offbeat', { root:69.3, scale:'major', step:bpm(128),
+    sub:true, sidechain:0.74, bassType:'sub',
+    prog:'wide', chordEvery:2, chordVoices:7, chordDetune:19, chordWobble:true,
+    chordLevel:0.048, bass:'..0...0...0...0.', drums:K.house,
+    droneGain:0.035, cutoff:560, revSec:2.8, revMix:0.36, pluckChance:0 }),
+
+  S('synthwave','Synthwave','Arpeggiated bass, big gated snare', { root:55, scale:'aeolian', step:bpm(100),
+    sub:true, sidechain:0.45, bassType:'acid', bassLen:0.8,
+    prog:'anthem', chordEvery:16, chordVoices:7, chordDetune:15, chordLevel:0.046,
+    bass:'0.0.0.0.0.0.0.0.', drums:K.retro, pluckOct:24, pluckEvery:4, pluckChance:0.6,
+    pluckWave:'triangle', droneGain:0.055, droneType:'sawtooth', cutoff:700,
+    revSec:5.2, revMix:0.56 }),
+
+  S('bigroom','Big Room','Festival kick and a wide drop', { root:73.4, scale:'major', step:bpm(128),
+    sub:true, sidechain:0.86, drive:0.22, bassType:'sub',
+    prog:'lift', chordEvery:2, chordVoices:7, chordDetune:21, chordLevel:0.052,
+    bass:'0.0.0.0.0.0.0.0.', riserEvery:64, drums:K.bigroom,
+    droneGain:0.03, cutoff:500, revSec:3.2, revMix:0.40, pluckChance:0 }),
+
+  S('trap','Trap','808 glide and triplet hats', { root:46.2, scale:'aeolian', step:bpm(140),
+    sub:true, sidechain:0.52, bassType:'808', bassLen:2.4,
+    prog:'open', chordEvery:16, chordVoices:5, chordDetune:12, chordLevel:0.036,
+    bass:'0.......0...0...', drums:K.trap, pluckOct:24, pluckEvery:8, pluckChance:0.4,
+    droneGain:0.03, cutoff:420, revSec:3.4, revMix:0.42 }),
+
+  S('hardstyle','Hardstyle','Distorted kick, reverse bass', { root:58.3, scale:'aeolian', step:bpm(150),
+    sub:true, sidechain:0.90, drive:0.55, bassType:'sub', bassLen:0.7,
+    prog:'anthem', chordEvery:4, chordVoices:7, chordDetune:17, chordLevel:0.048,
+    bass:'..0...0...0...0.', drums:K.hard,
+    droneGain:0.03, cutoff:440, revSec:2.4, revMix:0.30, pluckChance:0 }),
+
+  S('bigbeat','Big Beat','Loose breaks and a dirty bass', { root:58.3, scale:'dorian', step:bpm(130),
+    sub:true, sidechain:0.50, drive:0.18, bassType:'acid', bassLen:1.4,
+    prog:'open', chordEvery:16, chordVoices:5, chordDetune:10, chordLevel:0.038,
+    bass:'0...0.0...0.0...', drums:K.bigbeat, pluckOct:12, pluckChance:0.4,
+    pluckWave:'square', droneGain:0.05, cutoff:480, revSec:3.0, revMix:0.38 }),
+
+  S('eurotrance','Eurotrance','Bright, fast, relentlessly major', { root:87.3, scale:'major', step:bpm(142),
+    sub:true, sidechain:0.80, bassType:'sub',
+    prog:'lift', chordEvery:2, chordVoices:7, chordDetune:18, chordLevel:0.050,
+    bass:'0.0.0.0.0.0.0.0.', riserEvery:64, drums:K.four,
+    arp:[0,4,7,12,7,4], arpOct:24, pluckEvery:1, pluckChance:1,
+    pluckWave:'square', pluckDecay:0.18,
+    droneGain:0.03, cutoff:520, revSec:2.6, revMix:0.34 }),
+
+  S('deepcut','Deep Cut','Slow house, long and hypnotic', { root:51.9, scale:'dorian', step:bpm(118),
+    sub:true, sidechain:0.62, bassType:'reese', bassLen:2.4,
+    prog:'wide', chordEvery:16, chordVoices:5, chordDetune:12, chordLevel:0.040,
+    bass:'0...0...0...0...', drums:K.deep, pluckOct:24, pluckEvery:8, pluckChance:0.4,
+    droneGain:0.06, cutoff:380, revSec:4.0, revMix:0.48 })
 ];
 
 /* A sequencer clock that a throttled page cannot starve.
@@ -984,6 +1097,7 @@ class Ambient {
     const ctx = this.ctx, t = ctx.currentTime;
     const wasRunning = this.running;
     this.running = false; this._clock.stop();
+    this.panic();                      // silence whatever is still buffered
     ramp(this.out.gain, 0.0001, t, 0.6);
     setTimeout(() => {
       this._teardownVoices();
@@ -1107,9 +1221,28 @@ class Ambient {
        may only get to run once every second or two and everything
        between now and the next tick has to already be scheduled. */
     const hidden = typeof document !== 'undefined' && document.hidden;
-    const horizon = ctx.currentTime + (hidden ? 3.0 : 0.30);
+    const now = ctx.currentTime;
+
+    /* Self-tuning. A fixed buffer is a guess at how hard this particular
+       phone throttles, and phones vary wildly — some OEM power savers are
+       far more aggressive than Chrome's own rules. Instead, watch how long
+       the clock actually goes between ticks and keep the buffer at several
+       times the worst recent gap. It stays tight while visible and grows
+       on its own if the browser starts starving us. The decay lets it
+       shrink again once ticks are frequent.
+       A tick costs well under a millisecond per second of music, so a
+       generous buffer is close to free. */
+    const gap = this._lastTick === undefined ? 0 : now - this._lastTick;
+    this._lastTick = now;
+    this._worstGap = Math.max(gap, (this._worstGap || 0) * 0.9);
+
+    const need = hidden
+      ? Math.min(12, Math.max(3, this._worstGap * 4))
+      : 0.30;
+    const horizon = now + need;
+
     let guard = 0;
-    while(this._next < horizon && guard++ < 400){
+    while(this._next < horizon && guard++ < 900){
       /* If we fell behind anyway, re-enter on a bar line rather than
          wherever the clock happens to be. Jumping to `now` lands
          mid-pattern and is audible as a lurch; this stays in phase. */
@@ -1175,6 +1308,27 @@ class Ambient {
     return this._nb || (this._nb = noiseBuffer(this.ctx, 1.2));
   }
 
+  /* Keep a handle on everything currently scheduled. With a buffer of
+     seconds rather than milliseconds, changing piece would otherwise let
+     the old one keep playing out of the buffer long after you switched —
+     so the notes have to be stoppable, not just disconnectable. */
+  _own(node){
+    (this._live ||= new Set()).add(node);
+    const drop = () => this._live.delete(node);
+    node.addEventListener ? node.addEventListener('ended', drop, { once:true })
+                          : (node.onended = drop);
+    return node;
+  }
+
+  /** Cut everything already scheduled. */
+  panic(){
+    const t = this.ctx.currentTime;
+    for(const n of (this._live || [])){
+      try{ n.stop(t); }catch{}
+    }
+    this._live && this._live.clear();
+  }
+
   /** Hits are scheduled ahead on the audio clock; this lands the visual
       cue at the same moment the sound actually reaches the speakers. */
   _report(when, strength){
@@ -1222,8 +1376,19 @@ class Ambient {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(0.82 * v, t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
-    o.connect(g); g.connect(this.dry);
-    o.start(t); o.stop(t + 0.4);
+    /* Hardstyle and its neighbours live on a distorted kick: the clip
+       adds harmonics an octave and more above the fundamental, which is
+       what lets it cut through on a small speaker. */
+    if(this.scene.drive){
+      const sh = ctx.createWaveShaper();
+      sh.curve = this._drive(this.scene.drive);
+      o.connect(sh); sh.connect(g);
+      setTimeout(() => { try{ sh.disconnect(); }catch{} }, 700);
+    } else {
+      o.connect(g);
+    }
+    g.connect(this.dry);
+    this._own(o); o.start(t); o.stop(t + 0.4);
     o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
 
     const n = ctx.createBufferSource(); n.buffer = this._noise();
@@ -1232,7 +1397,7 @@ class Ambient {
     ng.gain.setValueAtTime(0.20 * v, t);
     ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.016);
     n.connect(hp); hp.connect(ng); ng.connect(this.dry);
-    n.start(t); n.stop(t + 0.05);
+    this._own(n); n.start(t); n.stop(t + 0.05);
     n.onended = () => { try{ n.disconnect(); hp.disconnect(); ng.disconnect(); }catch{} };
   }
 
@@ -1246,7 +1411,7 @@ class Ambient {
     ng.gain.exponentialRampToValueAtTime(0.34 * v, t + 0.003);
     ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.155);
     n.connect(bp); bp.connect(ng); ng.connect(this.dry); ng.connect(this.revIn);
-    n.start(t); n.stop(t + 0.2);
+    this._own(n); n.start(t); n.stop(t + 0.2);
     n.onended = () => { try{ n.disconnect(); bp.disconnect(); ng.disconnect(); }catch{} };
 
     const o = ctx.createOscillator(); o.type = 'triangle';
@@ -1257,7 +1422,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.16 * v, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
     o.connect(g); g.connect(this.dry);
-    o.start(t); o.stop(t + 0.14);
+    this._own(o); o.start(t); o.stop(t + 0.14);
     o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1275,7 +1440,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     n.connect(hp); hp.connect(bp); bp.connect(g);
     g.connect(this.dry); if(open) g.connect(this.revIn);
-    n.start(t); n.stop(t + dur + 0.05);
+    this._own(n); n.start(t); n.stop(t + dur + 0.05);
     n.onended = () => { try{ n.disconnect(); hp.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1288,7 +1453,7 @@ class Ambient {
     g.gain.setValueAtTime(0.28 * v, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.030);
     n.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
-    n.start(t); n.stop(t + 0.06);
+    this._own(n); n.start(t); n.stop(t + 0.06);
     n.onended = () => { try{ n.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1316,7 +1481,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
 
     o.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
-    o.start(t); o.stop(t + decay + 0.4);
+    this._own(o); o.start(t); o.stop(t + decay + 0.4);
     o.onended = () => { try{ o.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1378,7 +1543,7 @@ class Ambient {
         const g = ctx.createGain();
         g.gain.value = 0.9 / (voices * notes.length);
         o.connect(g); g.connect(bus);
-        o.start(t); o.stop(t + dur + 0.4);
+        this._own(o); o.start(t); o.stop(t + dur + 0.4);
         o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
       }
     }
@@ -1386,25 +1551,115 @@ class Ambient {
                (dur + 1) * 1000);
   }
 
-  /** Sub bass on the chord root. Short, so it never masks the kick. */
+  /** A soft-clipping curve. Past a point the waveform stops growing and
+      starts squaring off, which is where the grit comes from. */
+  _drive(amount){
+    const n = 1024, c = new Float32Array(n), k = amount * 60;
+    for(let i = 0; i < n; i++){
+      const x = i * 2 / n - 1;
+      c[i] = (1 + k) * x / (1 + k * Math.abs(x));
+    }
+    return c;
+  }
+
+  /** Bass. Which voice depends on the piece — the difference between
+      drum-and-bass and dubstep and psytrance is mostly here, not in the
+      drum pattern. */
   bassNote(t, rootSemi){
     const ctx = this.ctx, s = this.scene;
-    const o = ctx.createOscillator();
-    o.type = 'sawtooth';
-    o.frequency.value = s.root * Math.pow(2, rootSemi / 12);
-
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 220; lp.Q.value = 3;
-
+    const f0 = s.root * Math.pow(2, rootSemi / 12);
+    const dest = s.sidechain ? this.duck : this.dry;
+    const kind = s.bassType || 'sub';
+    const dur = s.step * (s.bassLen || 1.5);
+    const kill = [];
     const g = ctx.createGain();
-    const dur = s.step * 1.5;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.30, t + 0.010);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(dest);
 
-    o.connect(lp); lp.connect(g); g.connect(s.sidechain ? this.duck : this.dry);
-    o.start(t); o.stop(t + dur + 0.1);
-    o.onended = () => { try{ o.disconnect(); lp.disconnect(); g.disconnect(); }catch{} };
+    if(kind === 'acid'){
+      /* TB-303: one saw through a steeply resonant lowpass whose cutoff
+         is swept by its own envelope. The squelch is the resonance
+         tracking that sweep, not the oscillator. */
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f0;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.Q.value = 14 + Math.random() * 8;
+      const peak = 380 + Math.random() * 2600;
+      lp.frequency.setValueAtTime(peak, t);
+      lp.frequency.exponentialRampToValueAtTime(140, t + dur * 0.9);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.26, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(lp); lp.connect(g); o.start(t); o.stop(t + dur + 0.05);
+      kill.push(o, lp);
+
+    } else if(kind === 'wobble'){
+      /* The cutoff is driven by an LFO locked to the grid, so the wobble
+         lands with the beat instead of drifting against it. */
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f0;
+      const o2 = ctx.createOscillator(); o2.type = 'square';
+      o2.frequency.value = f0; o2.detune.value = -12;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.Q.value = 9; lp.frequency.value = 220;
+      const lfo = ctx.createOscillator(); lfo.type = 'sine';
+      lfo.frequency.value = 1 / (s.step * (s.wobble || 2));
+      const amt = ctx.createGain(); amt.gain.value = 900;
+      lfo.connect(amt); amt.connect(lp.frequency); lfo.start(t);
+      const sh = ctx.createWaveShaper(); sh.curve = this._drive(0.35);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.24, t + 0.012);
+      g.gain.setValueAtTime(0.24, t + dur * 0.85);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(lp); o2.connect(lp); lp.connect(sh); sh.connect(g);
+      this._own(o); o.start(t); o.stop(t + dur + 0.05);
+      this._own(o2); o2.start(t); o2.stop(t + dur + 0.05);
+      lfo.stop(t + dur + 0.05);
+      kill.push(o, o2, lp, lfo, amt, sh);
+
+    } else if(kind === 'reese'){
+      /* Two detuned saws beating against each other — the growl is the
+         phase cancellation between them, so the detune has to be wide. */
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2;
+      [-18, 0, 17].forEach(d => {
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.value = f0; o.detune.value = d;
+        o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
+        kill.push(o);
+      });
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.015);
+      g.gain.setValueAtTime(0.22, t + dur * 0.8);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      lp.connect(g);
+      kill.push(lp);
+
+    } else if(kind === '808'){
+      // A long sine that glides down into its note and rings on.
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0 * 2.2, t);
+      o.frequency.exponentialRampToValueAtTime(f0, t + 0.07);
+      const sh = ctx.createWaveShaper(); sh.curve = this._drive(0.18);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.42, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 2.2);
+      o.connect(sh); sh.connect(g); o.start(t); o.stop(t + dur * 2.2 + 0.1);
+      kill.push(o, sh);
+
+    } else {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f0;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 220; lp.Q.value = 3;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.30, t + 0.010);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(lp); lp.connect(g); o.start(t); o.stop(t + dur + 0.1);
+      kill.push(o, lp);
+    }
+
+    const life = (kind === '808' ? dur * 2.2 : dur) + 0.4;
+    setTimeout(() => {
+      for(const n of kill){ try{ n.disconnect(); }catch{} }
+      try{ g.disconnect(); }catch{}
+    }, life * 1000);
   }
 
   /** A riser over the bar before a section turns over. */
@@ -1424,7 +1679,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.12);
 
     n.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
-    n.start(t); n.stop(t + dur + 0.2);
+    this._own(n); n.start(t); n.stop(t + dur + 0.2);
     n.onended = () => { try{ n.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1449,7 +1704,7 @@ class Ambient {
         g.gain.exponentialRampToValueAtTime(level, t + 0.006 + i * 0.004);
         g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
         o.connect(g); g.connect(this.dry); g.connect(this.revIn);
-        o.start(t); o.stop(t + decay + 0.2);
+        this._own(o); o.start(t); o.stop(t + decay + 0.2);
         o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
       });
     });
@@ -1462,7 +1717,7 @@ class Ambient {
     ng.gain.setValueAtTime(0.030 * amp, t);
     ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
     n.connect(bp); bp.connect(ng); ng.connect(this.revIn);
-    n.start(t); n.stop(t + 0.35);
+    this._own(n); n.start(t); n.stop(t + 0.35);
     n.onended = () => { try{ n.disconnect(); bp.disconnect(); ng.disconnect(); }catch{} };
 
     // A calm piece has no drums, so the bowl is what the field sees.
@@ -1490,7 +1745,7 @@ class Ambient {
 
     src.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
     const off = Math.random() * 0.22;
-    src.start(t + off); src.stop(t + off + len + 0.05);
+    this._own(src); src.start(t + off); src.stop(t + off + len + 0.05);
     src.onended = () => { try{ src.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1510,7 +1765,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.58);
 
     o.connect(g); g.connect(this.dry);
-    o.start(t); o.stop(t + 0.7);
+    this._own(o); o.start(t); o.stop(t + 0.7);
     o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1528,7 +1783,7 @@ class Ambient {
     g.gain.exponentialRampToValueAtTime(0.055, t + 2.4);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 6.6);
     o.connect(f); f.connect(g); g.connect(this.revIn); g.connect(this.dry);
-    o.start(t); o.stop(t + 7);
+    this._own(o); o.start(t); o.stop(t + 7);
     o.onended = () => { try{ o.disconnect(); f.disconnect(); g.disconnect(); }catch{} };
   }
 
@@ -1546,6 +1801,7 @@ class Ambient {
   stop(){
     this.running = false;
     this._clock.dispose();
+    this.panic();
     document.removeEventListener('visibilitychange', this._retune);
     ramp(this.out.gain, 0.0001, this.ctx.currentTime, 0.35);
     setTimeout(() => {

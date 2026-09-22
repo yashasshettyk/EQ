@@ -459,12 +459,26 @@ roughly once a second or worse. A look-ahead scheduler fed that slowly
 schedules notes into the past, and you hear it as stuttering. A worker's timer
 is throttled far less and is not competing with rendering.
 
-**The look-ahead grows when hidden**, from 0.3 seconds to 3. Short while
-visible so a change of piece takes effect at once; long while hidden because
-everything between now and whenever the clock next gets to run has to already
-be committed. Measured: a 2.5-second stall while hidden leaves the scheduler
-still half a second *ahead*, so there is no discontinuity at all — where at
-0.3s it would have been two and a half seconds behind.
+**The look-ahead tunes itself.** A fixed buffer is a guess at how hard a
+particular phone throttles, and phones vary wildly — some OEM power savers are
+far more aggressive than Chrome's own rules. So the scheduler watches how long
+the clock actually goes between ticks and keeps the buffer at four times the
+worst recent gap, decaying back down once ticks are frequent again. It sits at
+0.3 seconds while visible, and grows on its own if the browser starts starving
+it. Measured: starved on a two-second cycle, it observed the gap and grew the
+buffer to 8.1 seconds by itself.
+
+This is affordable because a tick is cheap — 0.8 ms of work per three seconds
+of music, against a 2.67 ms audio quantum — so a generous buffer costs close
+to nothing. That is worth measuring rather than assuming: a long look-ahead
+means each throttled tick builds a *burst* of nodes, and a big enough burst
+would itself glitch the audio.
+
+**Buffered notes are cancellable.** With seconds of music committed in
+advance, changing piece would otherwise let the old one keep playing out of
+the buffer long after you switched. Every one-shot source is held so it can be
+stopped, not merely disconnected — 307 of them were live in one test — and
+changing piece cuts them.
 
 **Catching up re-enters on a bar line.** Past 3 seconds the buffer does run
 dry, and jumping to wherever the clock happens to be lands mid-pattern and is
