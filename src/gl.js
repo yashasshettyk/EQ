@@ -146,7 +146,7 @@ export async function buildPrograms(gl, specs, yieldTo, defines){
 
 /* ── render targets ────────────────────────────────────────── */
 
-export function createTarget(gl, w, h, { float = true, linear = true } = {}){
+export function createTarget(gl, w, h, { float = true, linear = true, depth = false } = {}){
   const useF = float && gl.hdr;
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -162,12 +162,27 @@ export function createTarget(gl, w, h, { float = true, linear = true } = {}){
   const fbo = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+  /* Without this, enabling GL_DEPTH_TEST is a no-op: there is nothing to
+     test against, and everything drawn later paints straight over what
+     came before. Additive particles never noticed; solid spheres do. */
+  let rbo = null;
+  if(depth){
+    rbo = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rbo);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rbo);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+  }
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
   return {
-    tex, fbo, w, h,
+    tex, fbo, rbo, w, h,
     bind(){ gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0,0,w,h); },
-    dispose(){ gl.deleteTexture(tex); gl.deleteFramebuffer(fbo); }
+    dispose(){
+      gl.deleteTexture(tex); gl.deleteFramebuffer(fbo);
+      if(rbo) gl.deleteRenderbuffer(rbo);
+    }
   };
 }
 

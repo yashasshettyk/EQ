@@ -152,6 +152,36 @@
     </div>
   </div>
 
+  <!-- ───────────────────────── Solar ───────────────────────── -->
+  <div class="solar" id="solarUI" hidden>
+    <div class="solar__id">
+      <p class="solar__ord" id="solarOrd"></p>
+      <h2 class="solar__title" id="solarGhost"></h2>
+    </div>
+
+    <nav class="solar__nav" id="solarNav" aria-label="Bodies"></nav>
+
+    <button class="solar__rail solar__rail--l" id="solarPrev"><span></span></button>
+    <button class="solar__rail solar__rail--r" id="solarNext"><span></span></button>
+
+    <div class="solar__foot">
+      <p class="solar__alt" id="solarAlt">—</p>
+      <button class="solar__discover" id="solarDiscover">
+        <span>Discover</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+
+    <aside class="solar__panel" id="solarPanel" hidden>
+      <button class="solar__close" id="solarClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2 id="solarName">Earth</h2>
+      <p class="solar__blurb" id="solarBlurb"></p>
+      <dl id="solarFacts"></dl>
+    </aside>
+  </div>
+
   <!-- ───────────────────────── Sheets ───────────────────────── -->
   <div class="sheet" id="helpSheet" hidden>
     <div class="sheet__card">

@@ -170,6 +170,52 @@ the tangent passes vertical and the tube visibly twists at the flip.
 Switching designs cross-fades the particles between the two geometries rather
 than cutting, staggered per particle so the change sweeps through the field.
 
+## The solar system
+
+A second renderer, sharing the GL context, the post chain and the device
+profile with the particle field. Pick it from the same design menu — the
+system as a whole, or any of the nine bodies.
+
+**There are no texture files.** Every surface is evaluated per fragment from
+noise, and the octave count is driven by how much of the screen the body
+fills, so approaching one *adds* detail rather than magnifying what is
+already there. A bitmap has a last mip and eventually shows you its pixels;
+this does not, which is the only way "infinite zoom with a clean texture" is
+actually true rather than merely a long zoom.
+
+Each world is built from what it is actually known for, not generic noise at
+different frequencies:
+
+| | |
+| --- | --- |
+| **Sun** | Granulation over supergranulation, sunspots with umbra, penumbra and surrounding faculae, differential rotation (the equator laps the poles), true limb darkening that reddens as it dims, and a chromosphere rim with prominences arching off it |
+| **Mercury** | Four scales of cratering with raised rims, the Caloris basin, bright ejecta rays from the youngest impacts, and the compression scarps left by the planet cooling |
+| **Venus** | A super-rotating cloud deck, the dark ultraviolet Y, and a vortex over each pole |
+| **Earth** | Continents with a shelf, mountain chains with a snow line, biomes by latitude and aridity, two cloud layers at different speeds, mid-latitude storm spirals, and city lights that appear only on the night side and only over land |
+| **Mars** | The crustal dichotomy — smooth northern lowlands, ancient cratered southern highlands — plus Valles Marineris, Olympus Mons and the Tharsis shields, the Hellas basin, wind streaks, and layered polar deposits |
+| **Jupiter** | Belts and zones warped by differential rotation, festoons curling off the belt edges, white ovals, and the Great Red Spot with its bright collar |
+| **Saturn** | Softer banding, the hexagonal polar jet, and rings with the Cassini and Encke divisions and the planet's shadow falling across them |
+| **Uranus** | Near-featureless methane cyan, lying on its side at 97.8° |
+| **Neptune** | Deep blue banding and a dark spot |
+
+Distances and sizes are power-compressed. At true scale the planets are
+invisible specks separated by emptiness — Earth would be one pixel with
+Neptune four kilometres off-screen — so both axes are compressed for the
+system view. The figures in the panel are the real ones.
+
+Zoom is exponential in log-altitude, so one turn of the wheel covers the same
+*proportion* of the distance whether you are outside Neptune's orbit or a
+hundred metres off the cloud tops. The near and far planes ride the altitude
+with it; a fixed pair cannot hold both without the depth buffer collapsing.
+
+The sky is procedural too: the galactic plane with its dust lanes, emission
+and reflection nebulae, and a few distant galaxies, evaluated from the view
+ray. No cube map, so it costs no memory and never repeats.
+
+The post chain carries two grades. Additive particles want a low bloom
+threshold so every point contributes a halo; a lit sphere is the opposite,
+and the same settings smear it into a featureless white ball.
+
 ## Controls
 
 | Key | |

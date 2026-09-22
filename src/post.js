@@ -168,18 +168,32 @@ export class Post {
     this.levels = [];
     this.scene  = null;
 
-    this.settings = {
-      threshold: 0.74, softKnee: 0.52, bloom: 1.22,
-      exposure: 1.12, vignette: 0.44, aberration: 0.0022, grain: 0.012
+    /* Two grades. The particle field is additive and wants a low bloom
+       threshold so every point contributes a halo. A lit sphere is the
+       opposite: it already has broad bright areas, and the same settings
+       smear them into a white ball. */
+    this.presets = {
+      field: { threshold: 0.74, softKnee: 0.52, bloom: 1.22,
+               exposure: 1.12, vignette: 0.44, aberration: 0.0022, grain: 0.012 },
+      solar: { threshold: 1.15, softKnee: 0.35, bloom: 0.50,
+               exposure: 1.00, vignette: 0.40, aberration: 0.0013, grain: 0.010 }
     };
+    this.settings = { ...this.presets.field };
   }
 
   /** @param w,h scene resolution in render pixels (may be far above screen) */
+  /** Cross-fade between grades so switching views does not flash. */
+  grade(name, k = 1){
+    const a = this.presets[name];
+    if(!a) return;
+    for(const key in a) this.settings[key] += (a[key] - this.settings[key]) * k;
+  }
+
   resize(w, h){
     const gl = this.gl;
     this.dispose();
 
-    this.scene = createTarget(gl, w, h, { float:true, linear:true });
+    this.scene = createTarget(gl, w, h, { float:true, linear:true, depth:true });
 
     // Bloom chain is capped so memory stays bounded at any scene resolution.
     const CAP = 1280;
@@ -209,7 +223,9 @@ export class Post {
     const gl = this.gl;
     this.scene.bind();
     gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clearDepth(1);
+    gl.depthMask(true);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
   /** @param outW,outH the drawing-buffer size we resolve down to */

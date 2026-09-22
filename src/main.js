@@ -5,6 +5,8 @@
 import { getContext, profileDevice } from './gl.js';
 import { Field, PALETTES, TIERS, MODES } from './field.js';
 import { Post } from './post.js';
+import { Solar } from './solar.js';
+import { BODIES } from './bodies.js';
 import { AudioEngine, SCENES } from './audio.js';
 
 const $ = id => document.getElementById(id);
@@ -22,7 +24,12 @@ const el = {
   gain:$('gainRange'), scrub:$('scrub'), scrubFill:$('scrubFill'),
   scrubKnob:$('scrubKnob'), scrubTime:$('scrubTime'),
   help:$('helpSheet'), toast:$('toast'), drop:$('drop'), picker:$('filePicker'),
-  gainWrap:$('gainWrap')
+  gainWrap:$('gainWrap'),
+  solarUI:$('solarUI'), solarGhost:$('solarGhost'), solarNav:$('solarNav'),
+  solarPrev:$('solarPrev'), solarNext:$('solarNext'), solarAlt:$('solarAlt'),
+  solarDiscover:$('solarDiscover'), solarPanel:$('solarPanel'),
+  solarClose:$('solarClose'), solarName:$('solarName'),
+  solarBlurb:$('solarBlurb'), solarFacts:$('solarFacts'), solarOrd:$('solarOrd')
 };
 
 /* ── persisted preferences ───────────────────────────────── */
@@ -33,7 +40,8 @@ const store = {
 
 /* ── boot ────────────────────────────────────────────────── */
 
-let gl, field, post, audio, profile;
+let gl, field, post, audio, profile, solar;
+let view = 'field';          // 'field' | 'solar'
 
 function fatal(err){
   console.error(err);
@@ -108,6 +116,7 @@ function resize(force){
     sceneW = r.w; sceneH = r.h;
     post.resize(sceneW, sceneH);
     field.resize(sceneW, sceneH, cssW / cssH);
+    solar?.resize(sceneW, sceneH, cssW / cssH);
 
     // If the driver refused the target, drop a tier rather than render black.
     gl.bindFramebuffer(gl.FRAMEBUFFER, post.scene.fbo);
@@ -265,6 +274,99 @@ function applyMode(i, announce){
   store.set('mode', field.modeB);
   if(announce) toast(m.name);
 }
+
+/* ── the solar system ─────────────────────────────────────── */
+
+function enterSolar(which){
+  view = 'solar';
+  el.solarUI.hidden = false;
+  document.body.classList.add('is-solar');
+
+  if(which === 'all'){ solar.viewAll(); }
+  else {
+    const i = BODIES.findIndex(b => b.id === which);
+    const want = i < 0 ? 3 : i;
+    if(want === solar.focus) solar.frameLit();     // re-entering the same body
+    else solar.setFocus(want);
+  }
+  syncSolar();
+  el.formLabel.textContent = which === 'all' ? 'The System' : solar.focused.name;
+  store.set('view', 'solar');
+  store.set('body', which);
+  showChrome();
+}
+
+function leaveSolar(){
+  if(view !== 'solar') return;
+  view = 'field';
+  el.solarUI.hidden = true;
+  el.solarPanel.hidden = true;
+  el.solarUI.classList.remove('is-open');
+  document.body.classList.remove('is-solar');
+  store.set('view', 'field');
+}
+
+function syncSolar(){
+  const b = solar.focused;
+  el.solarGhost.textContent = b.name;
+  el.solarOrd.textContent = b.kind === 'star'
+    ? 'The star'
+    : `${['','First','Second','Third','Fourth','Fifth','Sixth','Seventh','Eighth'][solar.focus]} planet from the Sun`;
+  el.solarName.textContent = b.name;
+  el.solarBlurb.textContent = b.blurb;
+  el.formLabel.textContent = b.name;
+
+  el.solarFacts.replaceChildren();
+  for(const [k, v] of b.facts){
+    const row = document.createElement('div');
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v;
+    row.append(dt, dd);
+    el.solarFacts.appendChild(row);
+  }
+
+  [...el.solarNav.children].forEach((d, i) =>
+    d.classList.toggle('is-on', i === solar.focus));
+
+  const n = BODIES.length;
+  el.solarPrev.querySelector('span').textContent = BODIES[(solar.focus - 1 + n) % n].name;
+  el.solarNext.querySelector('span').textContent = BODIES[(solar.focus + 1) % n].name;
+}
+
+function buildSolarNav(){
+  el.solarNav.replaceChildren();
+  BODIES.forEach((b, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'solar__dot';
+    btn.title = b.name;
+    const dot = document.createElement('i');
+    // Sized by the cube root of radius, so Jupiter reads bigger than
+    // Mercury without making Mercury invisible.
+    dot.style.setProperty('--d',
+      (3.5 + Math.pow(b.radiusKm / 6371, 0.33) * 3.4).toFixed(1) + 'px');
+    const lab = document.createElement('span');
+    lab.textContent = b.name;
+    btn.append(dot, lab);
+    btn.addEventListener('click', () => { solar.setFocus(i); syncSolar(); });
+    el.solarNav.appendChild(btn);
+  });
+}
+
+el.solarPrev.addEventListener('click', () => {
+  solar.setFocus((solar.focus - 1 + BODIES.length) % BODIES.length); syncSolar();
+});
+el.solarNext.addEventListener('click', () => {
+  solar.setFocus((solar.focus + 1) % BODIES.length); syncSolar();
+});
+el.solarDiscover.addEventListener('click', () => {
+  const open = el.solarPanel.hidden;
+  el.solarPanel.hidden = !open;
+  el.solarUI.classList.toggle('is-open', open);
+});
+el.solarClose.addEventListener('click', () => {
+  el.solarPanel.hidden = true;
+  el.solarUI.classList.remove('is-open');
+});
 
 /* ── generative scene ────────────────────────────────────── */
 
@@ -483,15 +585,16 @@ el.canvas.addEventListener('pointermove', e => {
   if(!field || !touches.has(e.pointerId)) return;
   touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
 
+  const R = view === 'solar' ? solar : field;
   if(touches.size >= 2){
     // Two fingers dolly; one orbits. Same gesture vocabulary as a map.
     const d = spread();
-    if(pinchDist > 0 && d > 0) field.dolly((pinchDist - d) * 1.9);
+    if(pinchDist > 0 && d > 0) R.dolly((pinchDist - d) * 1.9);
     pinchDist = d;
     return;
   }
   if(!dragging) return;
-  field.orbit(e.clientX - lastX, e.clientY - lastY);
+  R.orbit(e.clientX - lastX, e.clientY - lastY);
   lastX = e.clientX; lastY = e.clientY;
 });
 
@@ -509,7 +612,8 @@ el.canvas.addEventListener('pointerup', endDrag);
 el.canvas.addEventListener('pointercancel', endDrag);
 el.canvas.addEventListener('wheel', e => {
   if(!field) return;
-  e.preventDefault(); field.dolly(e.deltaY);
+  e.preventDefault();
+  (view === 'solar' ? solar : field).dolly(e.deltaY);
 }, { passive:false });
 
 // A resting pointer still nudges the camera — parallax keeps it alive.
@@ -539,10 +643,19 @@ window.addEventListener('drop', e => {
 /* ── buttons ─────────────────────────────────────────────── */
 
 el.btnForm.addEventListener('click', () => {
-  openMenu(el.btnForm,
-    MODES.map(m => ({ id:m.id, name:m.name, blurb:m.blurb, group:m.group })),
-    MODES[field.modeB].id,
-    id => applyMode(MODES.findIndex(m => m.id === id), false));
+  const items = MODES.map(m => ({ id:m.id, name:m.name, blurb:m.blurb, group:m.group }));
+  // The system is one more thing you can be looking at, so it belongs in
+  // the same list rather than behind a separate switch.
+  items.push({ id:'solar:all', name:'The System', group:'Solar System',
+               blurb:'All nine bodies, seen from outside the orbits' });
+  for(const b of BODIES)
+    items.push({ id:'solar:' + b.id, name:b.name, group:'Solar System', blurb:b.blurb });
+
+  const current = view === 'solar' ? 'solar:' + solar.focused.id : MODES[field.modeB].id;
+  openMenu(el.btnForm, items, current, id => {
+    if(id.startsWith('solar:')) enterSolar(id.slice(6));
+    else { leaveSolar(); applyMode(MODES.findIndex(m => m.id === id), false); }
+  });
 });
 
 el.btnScene.addEventListener('click', () => {
@@ -651,7 +764,7 @@ window.addEventListener('keydown', e => {
       break;
     case 'q': case 'Q': applyTier(tierIndex + 1, { toast:true }); break;
     case 's': case 'S': openGate(); break;
-    case 'r': case 'R': field.recentre(); break;
+    case 'r': case 'R': (view === 'solar' ? solar : field).recentre(); break;
     case 'h': case 'H':
       manualHide = !manualHide;
       document.body.classList.toggle('is-hidden-ui', manualHide);
@@ -685,13 +798,19 @@ function frame(now){
 
   post.beginScene();
   gl.viewport(0, 0, sceneW, sceneH);
-  field.render(dt, audio);
-  post.render(out.w, out.h, field.time);
+  post.grade(view === 'solar' ? 'solar' : 'field', Math.min(1, dt * 3.5));
+  if(view === 'solar') solar.render(dt, audio);
+  else                 field.render(dt, audio);
+  post.render(out.w, out.h, view === 'solar' ? solar.time : field.time);
 
   tickChrome(now);
 
   uiAcc += dt;
-  if(uiAcc > 1/30){ updateUI(uiAcc); uiAcc = 0; }
+  if(uiAcc > 1/30){
+    updateUI(uiAcc);
+    if(view === 'solar') el.solarAlt.textContent = solar.altitudeLabel;
+    uiAcc = 0;
+  }
 
   // ── adaptive governor: protect the frame rate, never the ego
   govern(now, dt);
@@ -837,6 +956,7 @@ async function boot(){
     // Build the field in chunks so the launch screen paints and stays
     // responsive while the shaders link and the buffers fill.
     field = await Field.create(gl, profile);
+    solar = new Solar(gl, profile);
   }catch(err){
     fatal(err);
     return;
@@ -877,8 +997,12 @@ async function boot(){
   field.setComposition(gateOffset(), true);
   syncTransport();
 
+  buildSolarNav();
+  if(store.get('view', 'field') === 'solar') enterSolar(store.get('body', 'earth'));
+
   document.body.classList.remove('is-booting');
-  window.__resonance = { gl, field, post, audio, profile,
+  window.__resonance = { gl, field, solar, post, audio, profile,
+    enterSolar, leaveSolar, get view(){ return view; },
     applyTier, applyMode, applyPalette, applyScene,
     get tier(){ return TIERS[tierIndex]; },
     get tierIndex(){ return tierIndex; },
