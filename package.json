@@ -1,0 +1,10 @@
+{
+  "name": "resonance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A real-time particle equalizer — WebGL2, Web Audio, no dependencies.",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 8777 --bind 127.0.0.1"
+  }
+}
