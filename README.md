@@ -141,6 +141,7 @@ and sizes everything from that.
 | Tiers offered | four, to 8K | two |
 | Reflection pass | yes | no |
 | Noise field | 12 simplex evaluations per curl | a trig field, ~20× cheaper |
+| Starting load | 100% | 72%, or 40% on a low-memory device |
 
 That last row is the one that matters. The full curl costs twelve simplex
 evaluations per call and runs roughly sixteen times per shell particle — over
@@ -148,6 +149,38 @@ four million noise evaluations a frame at desktop counts, which no phone GPU
 will do. Under `CHEAP` the shader compiles against a trig field instead: not
 divergence-free, but it swirls convincingly and at these amplitudes the
 difference is not visible.
+
+### It measures itself
+
+No amount of sniffing tells you how fast a phone actually is — a renderer
+string is often masked, and core count says little about the GPU. So the
+renderer measures its own frames and adapts.
+
+Load is a continuous multiplier over both particle count and scene
+resolution, quantised to six steps so tuning it does not reallocate render
+targets on every nudge. It spans a 3.4× range:
+
+| Load | Scene (on a 390pt phone) | Particles |
+| --- | --- | --- |
+| 100% | 546 × 1181 | 43,500 |
+| 56% | 408 × 884 | 24,400 |
+| 30% | 299 × 647 | 13,100 |
+
+A phone *starts below its ceiling* and climbs only while frames stay cheap.
+A slow device therefore never has to be recognised in advance — it simply
+never gets promoted, and it never spends the first ten seconds stuttering
+while a governor works out what it is. One that starts to struggle sheds
+work within about a second.
+
+The window uses the median frame time, not the mean, so a single long frame
+from a GC pause or a scroll cannot trigger a downgrade. Frames from a hidden
+tab, or any frame over 50ms, are discarded rather than counted — rAF is
+throttled when the tab is backgrounded, and that is not the GPU's fault.
+
+The promotion threshold sits at 18.5ms, deliberately above a 60Hz vsync
+interval. A device holding a perfect 60fps reports 16.7ms; a threshold below
+that would read *comfortable* as *struggling* and strand every 60Hz phone at
+its opening settings forever.
 
 Resolution targets the panel's real pixels rather than a supersample factor.
 Anything below native reads as a blurred upscale on a dense display, and

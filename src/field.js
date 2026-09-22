@@ -47,6 +47,8 @@ const BASE = { shell:132000, wisp:46000, ripple:64000, dust:27000, spark:9216 };
 /** Let the browser paint between chunks of work. Building the field is
     hundreds of milliseconds of array maths and shader linking; done in one
     go it freezes the page, which on a phone reads as a crash. */
+export const LOAD_STEPS = [0.30, 0.42, 0.56, 0.72, 0.86, 1.00];
+
 const breathe = () => new Promise(r => {
   // Never rAF here. A hidden or backgrounded tab throttles it to about one
   // frame a second, which turns a short build into a stall that never ends.
@@ -68,6 +70,7 @@ export class Field {
       .map(([k, v]) => [k, Math.ceil(v * 1.26)]));
 
     this.counts = { ...this.base };
+    this.load = profile.startLoad;
     this.modeA = 0; this.modeB = 0; this.morph = 0; this.morphRate = 0;
     this.octaves = profile.octaveCap;
     this.intensity = 1;
@@ -305,9 +308,18 @@ export class Field {
   /** Distance that frames the form the same way on any aspect ratio. */
   fitDistance(){
     const extent = MODES[this.modeB].extent, frac = 0.80;
+    const a  = this.aspect || 1;
     const tv = Math.tan(this.fov / 2);
-    const th = tv * (this.aspect || 1);
-    return clamp(Math.max(extent / (tv * frac), extent / (th * frac)), 4.6, 26);
+    const th = tv * a;
+    let d = Math.max(extent / (tv * frac), extent / (th * frac));
+
+    // On a portrait screen the width is the binding constraint, which
+    // leaves the form floating in a tall empty frame. Pull in a little and
+    // let the extremes run past the edges — filling the frame reads better
+    // than letterboxing it.
+    if(a < 0.85) d *= 0.86 + (a - 0.45) * 0.30;
+
+    return clamp(d, 4.6, 26);
   }
 
   orbit(dx, dy){
@@ -398,8 +410,26 @@ export class Field {
   setTier(tier){
     this.tier = tier;
     this.octaves = Math.min(tier.oct, this.profile.octaveCap);
+    this._applyCounts();
+  }
+
+  _applyCounts(){
+    const mul = (this.tier?.mul ?? 1) * this.load;
     for(const k in this.base)
-      this.counts[k] = Math.min(this.maxc[k], Math.round(this.base[k] * tier.mul));
+      this.counts[k] = Math.max(256,
+        Math.min(this.maxc[k], Math.round(this.base[k] * mul)));
+  }
+
+  /** Quantised so the governor can tune particle count every second
+      without reallocating render targets on every nudge. */
+  setLoad(k){
+    const steps = LOAD_STEPS;
+    let best = steps[0];
+    for(const s of steps) if(Math.abs(s - k) < Math.abs(best - k)) best = s;
+    if(best === this.load) return false;
+    this.load = best;
+    this._applyCounts();
+    return true;
   }
 
   /** Works out the scene resolution for a tier, honouring the GPU's
@@ -428,6 +458,11 @@ export class Field {
     // clamp to the largest texture the driver will give us
     const k1 = Math.min(1, maxTex / Math.max(w, h));
     w *= k1; h *= k1;
+    // pixel count follows the load, so a struggling device sheds fill rate
+    // as well as geometry
+    const kl = Math.sqrt(this.load);
+    w *= kl; h *= kl;
+
     // and to the memory budget this device can actually carry
     const k2 = Math.min(1, Math.sqrt(this.profile.maxPixels / Math.max(1, w * h)));
     w *= k2; h *= k2;

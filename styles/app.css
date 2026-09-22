@@ -388,6 +388,17 @@ body.is-hidden-ui .dock{ opacity:0; transform:translateX(-50%) translateY(16px);
   -webkit-backdrop-filter:blur(30px) saturate(170%); backdrop-filter:blur(30px) saturate(170%);
 }
 .sheet__card h2{ margin:0 0 18px; font-size:19px; font-weight:560; letter-spacing:-.018em; }
+.sheet__row{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:4px 0 16px; margin-bottom:14px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.sheet__row > span{
+  font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-4);
+}
+.sheet__row .slider{ display:flex; padding:0; }
+.sheet__row .slider input{ width:min(180px, 42vw); }
+.sheet__row:empty{ display:none; }
 .sheet__card dl{ margin:0 0 18px; display:flex; flex-direction:column; gap:1px; }
 .sheet__card dl > div{
   display:flex; align-items:center; gap:14px; padding:8px 0;
@@ -442,8 +453,10 @@ body.is-hidden-ui .dock{ opacity:0; transform:translateX(-50%) translateY(16px);
   .btn--wide{ max-width:none; }
   .btn--wide span:not(.swatch){ display:none; }
   .btn{ padding:0 10px; gap:0; }
-  .slider{ display:none; }
+  .slider input{ width:64px; }
 }
+/* The meter is decorative; the intensity slider is not, so the meter goes
+   first and the slider survives down to the phone layout. */
 @media (max-width: 880px){
   .meter{ display:none; }
   .sep{ margin:0 2px; }
@@ -591,6 +604,39 @@ body.is-booting .eyebrow span{ animation-duration:1s; }
   .res{ display:none; }
 }
 
+/* ── short phones (SE, 13 mini, and anything with the URL bar showing) ──
+   The headline at full size eats half of a 667pt screen and pushes the
+   scene chips against the bottom edge. Compress the type rather than
+   letting the list slide off. */
+@media (max-width: 760px) and (max-height: 740px){
+  .gate__rail{ padding-bottom:2.5vh; }
+  .eyebrow{ margin-bottom:11px; font-size:9.5px; }
+  .gate__title{ font-size:clamp(30px,8.8vw,40px); }
+  .gate__sub{ font-size:12.5px; line-height:1.55; margin-bottom:16px; max-width:34ch; }
+  .cta{ margin-bottom:16px; }
+  .cta__primary, .cta__ghost{ height:49px; font-size:14.5px; }
+  .scenes__lead{ margin-bottom:7px; }
+  .chip{ height:36px; font-size:12px; }
+}
+
+/* Very short — a phone in landscape, or a small screen with browser chrome. */
+@media (max-width: 760px) and (max-height: 620px){
+  .gate__title{ font-size:clamp(26px,7.6vw,33px); }
+  .gate__sub{ display:none; }
+  .cta__primary, .cta__ghost{ height:45px; }
+  .eyebrow{ margin-bottom:9px; }
+}
+
+/* Narrow — original SE, small Androids. Eight icons still have to fit. */
+@media (max-width: 380px){
+  .dock{ padding:0 8px; }
+  .dock__pill{ padding:4px; }
+  .dock__pill > .btn{ height:42px; }
+  .btn svg{ width:18px; height:18px; }
+  .swatch{ width:17px; height:17px; }
+  .gate__sub{ max-width:none; }
+}
+
 @media (max-width: 760px) and (orientation: landscape){
   .gate__rail{ align-self:center; padding-bottom:0; }
   .gate__title{ font-size:clamp(26px,5.6vw,38px); }
@@ -600,6 +646,9 @@ body.is-booting .eyebrow span{ animation-duration:1s; }
 
 /* A coarse pointer has no hover, so nothing should depend on it. */
 @media (pointer: coarse){
+  /* A keyboard-shortcut table is dead weight on a device with no keyboard. */
+  .sheet__card dl{ display:none; }
+  .sheet__row{ padding-bottom:18px; margin-bottom:18px; }
   .src:hover, .chip:hover, .cta__ghost:hover, .cta__primary:hover{ transform:none; }
   .btn:active, .chip:active{ background:rgba(255,255,255,.16); }
   .cta__primary:active, .cta__ghost:active{ transform:scale(.98); }

@@ -118,7 +118,10 @@ function resize(force){
       applyTier(tierIndex - 1);
       return;
     }
-    el.res.textContent = `${sceneW} × ${sceneH}`;
+    perf.win.length = 0;
+    el.res.textContent = field.load < 0.99
+      ? `${sceneW} × ${sceneH} · ${Math.round(field.load * 100)}%`
+      : `${sceneW} × ${sceneH}`;
     el.res.classList.toggle('is-max', sceneW * sceneH > 12e6);
   }
 }
@@ -433,6 +436,13 @@ el.btnPalette.addEventListener('click', () => applyPalette(field.paletteIndex + 
 el.btnQuality.addEventListener('click', () => applyTier(tierIndex + 1, { toast:true }));
 el.btnFull.addEventListener('click', toggleFullscreen);
 el.btnHelp.addEventListener('click', () => { el.help.hidden = false; });
+
+// The shortcut list is hidden on touch, so the footer carries the gestures.
+if(COARSE){
+  const foot = document.querySelector('.sheet__foot');
+  if(foot) foot.textContent =
+    'Drag to orbit · Pinch to zoom · Tap an icon to change it · Drop an audio file to play it';
+}
 el.help.addEventListener('click', e => {
   if(e.target === el.help || e.target.hasAttribute('data-close')) el.help.hidden = true;
 });
@@ -447,6 +457,23 @@ function toggleFullscreen(){
    labels drop away and it becomes a single row of icons — no
    drawer, no second layer to go looking in. Each tap toasts what
    it changed, which is what the label was doing anyway. */
+
+/* The intensity slider has no room in the phone dock, so it moves into the
+   Controls sheet there — the node itself moves, so its listener and value
+   come with it and no second element claims the same id. */
+const narrowUI = matchMedia('(max-width: 760px)');
+const gainHome = { parent: el.gainWrap.parentNode, next: el.gainWrap.nextSibling };
+const gainSlot = $('sheetIntensity');
+
+function placeGain(){
+  if(narrowUI.matches){
+    if(el.gainWrap.parentNode !== gainSlot) gainSlot.appendChild(el.gainWrap);
+  } else if(el.gainWrap.parentNode !== gainHome.parent){
+    gainHome.parent.insertBefore(el.gainWrap, gainHome.next);
+  }
+}
+narrowUI.addEventListener('change', placeGain);
+placeGain();
 
 // Full screen is not available to web pages on iOS Safari; do not offer it.
 if(!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen){
@@ -533,22 +560,68 @@ function frame(now){
   if(uiAcc > 1/30){ updateUI(uiAcc); uiAcc = 0; }
 
   // ── adaptive governor: protect the frame rate, never the ego
-  // A hidden or occluded tab throttles rAF to a crawl. That is not the GPU
-  // struggling, so it must never be counted against the quality tier.
-  if(now > governorAt && document.visibilityState === 'visible' && dt < 0.05){
-    fpsAcc += dt; fpsN++;
-    if(fpsN >= 120){
-      // Sustained below ~34 fps is the only thing that earns a step down.
-      if(fpsAcc / fpsN > 0.029 && tierIndex > 0){
-        applyTier(tierIndex - 1);
-        toast(`Eased back to ${TIERS[tierIndex].name} to hold the frame rate.`);
-        governorAt = now + 20000;
-      }
-      fpsAcc = 0; fpsN = 0;
+  govern(now, dt);
+}
+
+/* ── adaptive governor ───────────────────────────────────────
+   No amount of sniffing tells you how fast a phone actually is, so
+   the renderer measures itself. Load starts below the device's
+   ceiling and climbs only while frames are cheap; a struggling
+   device simply never gets promoted, and one that starts to
+   struggle sheds work within about a second.
+
+   The median is used rather than the mean: a single long frame from
+   a GC pause or a scroll should not trigger a downgrade.          */
+
+const perf = {
+  win: [], warmUntil: 0, nextDown: 0, nextUp: 0, started: false
+};
+
+const SLOW_MS = 24.0;   // worse than ~42fps for a while: shed work
+/* Must sit above a 60Hz vsync interval. A device holding a perfect 60fps
+   reports 16.7ms, so a threshold below that would read "comfortable" as
+   "struggling" and strand every 60Hz phone at its opening settings. */
+const FAST_MS = 18.5;   // holding ~54fps or better: there is room to grow
+
+function govern(now, dt){
+  // A hidden or occluded tab throttles rAF to a crawl, and a long frame
+  // after a stall is not the GPU's fault. Neither may count.
+  if(document.visibilityState !== 'visible' || dt > 0.05){ perf.win.length = 0; return; }
+
+  if(!perf.started){
+    perf.started = true;
+    perf.warmUntil = now + 1200;      // shaders warm, first frames are lies
+    perf.nextDown = perf.warmUntil;
+    perf.nextUp = now + 2500;     // reach full quality quickly when able
+    return;
+  }
+  if(now < perf.warmUntil) return;
+
+  perf.win.push(dt * 1000);
+  if(perf.win.length < 24) return;
+
+  const sorted = perf.win.slice().sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1];
+  perf.win.length = 0;
+
+  if(median > SLOW_MS && now > perf.nextDown){
+    if(field.setLoad(field.load * 0.72)){
+      resize(true);
+      perf.nextDown = now + 1500;
+      perf.nextUp = now + 12000;      // do not immediately undo it
+    } else if(tierIndex > 0){
+      // Already at the geometry floor, so drop a whole tier.
+      applyTier(tierIndex - 1);
+      toast(`Eased to ${TIERS[tierIndex].name} to hold the frame rate.`);
+      perf.nextDown = now + 6000;
+    }
+  } else if(median < FAST_MS && field.load < 1 && now > perf.nextUp){
+    if(field.setLoad(field.load * 1.25)){
+      resize(true);
+      perf.nextUp = now + 2500;
     }
   }
 }
-
 function updateUI(){
   // status spectrum bars
   const spec = audio.spectrum;

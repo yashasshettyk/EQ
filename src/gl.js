@@ -35,15 +35,20 @@ export function profileDevice(gl){
   const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
   const tileGpu = /Adreno|Mali|PowerVR|Apple GPU/i.test(renderer);
 
-  const weak = mobile && (cores <= 4 || /Adreno [1-5]|Mali-[GT][1-6]/i.test(renderer));
+  const mem  = navigator.deviceMemory || 4;
+  const weak = mobile && (cores <= 4 || mem <= 3);
 
   return {
-    mobile, tileGpu, weak, renderer, cores,
+    mobile, tileGpu, weak, renderer, cores, mem,
+    // Where the adaptive governor starts. Phones begin below their ceiling
+    // and climb if the frames are cheap, so a slow device never has to be
+    // identified in advance — it simply never gets promoted.
+    startLoad: weak ? 0.40 : mobile ? 0.72 : 1,
     // geometry budget, as a fraction of the desktop particle counts
     geomScale:  weak ? 0.20 : mobile ? 0.34 : 1,
     // hard ceiling on the HDR scene buffer
     maxPixels:  weak ? 1.1e6 : mobile ? 2.4e6 : 35e6,
-    dprCap:     mobile ? 2 : 2,
+    dprCap:     weak ? 1.5 : 2,
     // the reflection pass doubles the hero draw call; not worth it on a phone
     reflections: !mobile,
     octaveCap:  weak ? 1 : mobile ? 2 : 3,
