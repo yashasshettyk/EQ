@@ -4,7 +4,10 @@
     {
       "name": "resonance",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8777", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "scripts/dev-server.py",
+        "8777"
+      ],
       "port": 8777
     }
   ]

@@ -10,8 +10,12 @@ No build step, no dependencies, no framework — WebGL2 and the Web Audio API.
 ## Run it locally
 
 ```bash
-python3 -m http.server 8777
+python3 scripts/dev-server.py 8777
 ```
+
+(`python3 -m http.server` works too, but it sends no cache headers, so browsers
+hold on to ES modules across edits and you end up debugging code you already
+replaced. The script above serves the same files with `no-store`.)
 
 Then open <http://localhost:8777>. Any static server works; it must be served
 over `http://` or `https://`, not opened as a `file://` URL, because the code
@@ -124,6 +128,47 @@ Bloom runs on a bounded mip chain rather than at scene resolution — glow is
 low-frequency and gains nothing from 8K, and this keeps memory flat as the
 scene resolution rises.
 
+## Phones
+
+A handset is not a small desktop: a fraction of the fill rate, a fraction of
+the memory bandwidth, and a battery. The renderer profiles the device at boot
+and sizes everything from that.
+
+| | Desktop | Phone |
+| --- | --- | --- |
+| Particles | 278,000 | 72,000 |
+| Scene buffer | up to 7680 × 4320 | the panel's own pixels, capped at 2.4 MP |
+| Tiers offered | four, to 8K | two |
+| Reflection pass | yes | no |
+| Noise field | 12 simplex evaluations per curl | a trig field, ~20× cheaper |
+
+That last row is the one that matters. The full curl costs twelve simplex
+evaluations per call and runs roughly sixteen times per shell particle — over
+four million noise evaluations a frame at desktop counts, which no phone GPU
+will do. Under `CHEAP` the shader compiles against a trig field instead: not
+divergence-free, but it swirls convincingly and at these amplitudes the
+difference is not visible.
+
+Resolution targets the panel's real pixels rather than a supersample factor.
+Anything below native reads as a blurred upscale on a dense display, and
+anything above it is wasted when the memory budget caps you anyway.
+
+Startup is chunked. Building the field is a few hundred milliseconds of array
+maths and shader linking; done in one go it freezes the page, which on a phone
+reads as a crash. Programs are linked without blocking on `LINK_STATUS` — that
+query stalls until the driver finishes, and it is most of the cost — and the
+browser is let through between each stage. The yield is a macrotask, never
+`requestAnimationFrame`: a hidden or backgrounded tab throttles rAF to about
+one frame a second, which would turn the build into a stall that never ends.
+
+The interface follows. Below 1040px the dock drops its labels rather than
+wrapping; on a phone it becomes a single row of icons that share the width and
+shrink together, so no number of controls can push one onto a second line. Each
+tap toasts what it changed, which is what the label was doing. Tier preference
+is stored per profile, so a tier chosen on a laptop never follows you onto a
+handset. Two fingers dolly, one orbits. Safe-area insets are respected, and
+full screen is hidden where the browser has no such thing.
+
 ## Running it for days
 
 The clock is wrapped at a fixed 1020-second period, and every animated term is
@@ -152,5 +197,6 @@ src/field.js        particle field, camera, quality tiers
 src/shaders.js      GLSL: noise, palettes, the four designs
 src/post.js         bloom, tonemap, supersample resolve
 src/audio.js        capture, analysis, the generative engine
-src/gl.js           WebGL2 helpers, mat4
+src/gl.js           WebGL2 helpers, device profile, mat4
+scripts/dev-server  static server that refuses to be cached
 ```

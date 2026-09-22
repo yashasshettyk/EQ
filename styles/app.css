@@ -27,6 +27,10 @@
           "Helvetica Neue", Inter, system-ui, sans-serif;
 
   --gutter: clamp(20px, 3.2vw, 44px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
 }
 
 *,*::before,*::after{ box-sizing:border-box; }
@@ -182,12 +186,14 @@ svg{ width:100%; height:100%; display:block; }
 .cta__primary:active{ transform:translateY(0) scale(.98); transition-duration:.1s; }
 
 .cta__ghost{
+  display:inline-flex; align-items:center; justify-content:center; gap:9px;
   height:44px; padding:0 18px; border-radius:12px;
   font-size:13.5px; letter-spacing:-.004em; color:var(--ink-2);
   border:1px solid var(--hair); background:rgba(255,255,255,.035);
   -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
   transition:transform .4s var(--ease), background .25s, border-color .25s, color .25s;
 }
+.cta__ghost svg{ display:none; width:16px; height:16px; flex:none; opacity:.72; }
 .cta__ghost:hover{ background:rgba(255,255,255,.085); border-color:rgba(255,255,255,.22); color:#fff; transform:translateY(-2px); }
 .cta__ghost:active{ transform:translateY(0) scale(.98); transition-duration:.1s; }
 
@@ -258,7 +264,8 @@ svg{ width:100%; height:100%; display:block; }
 .topbar{
   position:fixed; top:0; left:0; right:0; z-index:20;
   display:flex; align-items:center; justify-content:space-between;
-  padding:calc(var(--gutter) * .72) var(--gutter);
+  padding:calc(var(--gutter) * .72 + var(--safe-t)) calc(var(--gutter) + var(--safe-r))
+          calc(var(--gutter) * .72) calc(var(--gutter) + var(--safe-l));
   pointer-events:none;
   transition:opacity .5s var(--ease), transform .5s var(--ease);
 }
@@ -280,7 +287,7 @@ svg{ width:100%; height:100%; display:block; }
 
 /* ───────── dock ───────── */
 .dock{
-  position:fixed; left:50%; bottom:calc(var(--gutter) * .8); z-index:20;
+  position:fixed; left:50%; bottom:calc(var(--gutter) * .8 + var(--safe-b)); z-index:20;
   transform:translateX(-50%); max-width:calc(100vw - var(--gutter)*2);
   transition:opacity .5s var(--ease), transform .5s var(--ease);
 }
@@ -428,10 +435,18 @@ body.is-hidden-ui .dock{ opacity:0; transform:translateX(-50%) translateY(16px);
 @keyframes breathe{ 50%{ transform:scale(.993); border-color:rgba(255,255,255,.46) } }
 
 /* ───────── responsive ───────── */
-@media (max-width: 860px){
-  .dock__pill{ flex-wrap:wrap; justify-content:center; max-width:92vw; }
-  .slider,.meter{ display:none; }
-  .btn--wide{ max-width:128px; }
+/* Between a phone and a full desktop the labelled dock is too wide for one
+   line. Drop the labels rather than letting it wrap into three rows. */
+@media (max-width: 1040px){
+  .dock__pill{ flex-wrap:nowrap; max-width:96vw; }
+  .btn--wide{ max-width:none; }
+  .btn--wide span:not(.swatch){ display:none; }
+  .btn{ padding:0 10px; gap:0; }
+  .slider{ display:none; }
+}
+@media (max-width: 880px){
+  .meter{ display:none; }
+  .sep{ margin:0 2px; }
 }
 @media (max-width: 560px){
   .gate__sub{ font-size:13.5px; margin-bottom:26px; }
@@ -461,3 +476,131 @@ body.is-hidden-ui .dock{ opacity:0; transform:translateX(-50%) translateY(16px);
 body.is-gate .topbar,
 body.is-gate .dock{ opacity:0; pointer-events:none; }
 body.is-gate .dock{ transform:translateX(-50%) translateY(14px); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Boot + mobile
+   ═══════════════════════════════════════════════════════════ */
+
+/* Until the field is ready the chrome would act on nothing. */
+body.is-booting .dock,
+body.is-booting .topbar{ opacity:0; pointer-events:none; }
+body.is-booting .cta__primary,
+body.is-booting .cta__ghost,
+body.is-booting .chip{
+  opacity:.4; pointer-events:none; transition:opacity .4s var(--ease);
+}
+body.is-booting .eyebrow span{ animation-duration:1s; }
+
+
+/* ── phones ── */
+@media (max-width: 760px){
+  .dock{
+    left:var(--safe-l); right:var(--safe-r); transform:none;
+    max-width:none; padding:0 10px;
+    bottom:calc(14px + var(--safe-b));
+  }
+  .dock__pill{
+    position:relative; width:100%; padding:5px; gap:0;
+    border-radius:19px;
+    /* Never wrap. The buttons share the row and shrink together, so the
+       count of controls cannot push one onto a second line however
+       narrow the handset is. */
+    flex-wrap:nowrap;
+  }
+  .dock__pill > .btn{
+    flex:1 1 0; min-width:0; width:auto;
+    height:44px; padding:0; gap:0; justify-content:center;
+  }
+  body.is-hidden-ui .dock{ transform:translateY(18px); }
+  body.is-gate .dock{ transform:translateY(16px); }
+
+  /* Labels go; each tap toasts what it changed instead. The swatch is a
+     span too, so it has to be excused or the palette button empties out. */
+  .btn--wide{ max-width:none; }
+  .btn--wide span:not(.swatch){ display:none; }
+  .btn svg{ width:19px; height:19px; flex:none; }
+  .swatch{ display:block; width:18px; height:18px; flex:none; }
+
+  .sep, .meter, .slider{ display:none; }
+
+  /* The scrubber sits on its own line above the row, so it never competes
+     with the icons for width. */
+  .scrub.is-on{
+    position:absolute; left:6px; right:6px; bottom:calc(100% + 7px);
+    display:flex; padding:9px 13px; border-radius:15px;
+    background:rgba(16,17,21,.62); border:1px solid var(--hair);
+    -webkit-backdrop-filter:blur(26px) saturate(170%); backdrop-filter:blur(26px) saturate(170%);
+  }
+
+  /* ── home screen ──────────────────────────────────────────
+     Three separate buttons stack into three heavy slabs, and with the
+     chips underneath the whole lower half becomes boxes. One inset list
+     with hairline dividers reads as a single calm object instead. */
+  .gate__rail{ padding-bottom:4vh; }
+  .gate__title{ font-size:clamp(38px,11.5vw,52px); }
+  .gate__sub{ font-size:13.5px; line-height:1.6; margin-bottom:22px; max-width:30ch; }
+  .eyebrow{ margin-bottom:16px; }
+
+  .cta{
+    flex-direction:column; gap:0; margin-bottom:22px;
+    border:1px solid var(--hair); border-radius:17px; overflow:hidden;
+    background:rgba(255,255,255,.032);
+    -webkit-backdrop-filter:blur(22px) saturate(140%);
+    backdrop-filter:blur(22px) saturate(140%);
+  }
+  .cta__primary, .cta__ghost{
+    position:relative; width:100%; height:56px; flex:none;
+    border:0; border-radius:0; background:none; box-shadow:none;
+    justify-content:flex-start; gap:14px; padding:0 15px 0 16px;
+    font-size:15px; font-weight:450; letter-spacing:-.008em; color:var(--ink);
+    border-bottom:1px solid rgba(255,255,255,.065);
+  }
+  .cta > *:last-child{ border-bottom:0; }
+  .cta__primary:hover, .cta__ghost:hover{
+    background:rgba(255,255,255,.055); transform:none; filter:none; box-shadow:none;
+  }
+  .cta__primary:active, .cta__ghost:active{
+    background:rgba(255,255,255,.10); transform:none;
+  }
+  .cta__primary svg, .cta__ghost svg{
+    display:block; width:19px; height:19px; flex:none; opacity:.85;
+  }
+  /* The primary is marked by an accented glyph, not a slab of colour. */
+  .cta__primary svg{ color:#5e93ff; opacity:1; }
+
+  .cta__primary::after, .cta__ghost::after{
+    content:''; margin-left:auto; width:7px; height:7px; flex:none;
+    border-right:1.5px solid var(--ink-4); border-top:1.5px solid var(--ink-4);
+    transform:rotate(45deg);
+  }
+  .cta__primary.is-off, .cta__ghost.is-off{ opacity:.32; }
+
+  .scenes__lead{ font-size:10px; margin-bottom:8px; }
+  .scenes__row{
+    flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    margin:0 calc(var(--gutter) * -1); padding:2px var(--gutter) 8px;
+  }
+  .scenes__row::-webkit-scrollbar{ display:none; }
+  .chip{ flex:none; scroll-snap-align:start; height:40px; }
+
+  .gate__hint{ display:none; }
+  .topbar{ padding-top:calc(var(--safe-t) + 16px); }
+  .gate__nav{ padding-top:calc(var(--safe-t) + 16px); }
+  .res{ display:none; }
+}
+
+@media (max-width: 760px) and (orientation: landscape){
+  .gate__rail{ align-self:center; padding-bottom:0; }
+  .gate__title{ font-size:clamp(26px,5.6vw,38px); }
+  .gate__sub{ display:none; }
+  .scenes__lead{ margin-bottom:6px; }
+}
+
+/* A coarse pointer has no hover, so nothing should depend on it. */
+@media (pointer: coarse){
+  .src:hover, .chip:hover, .cta__ghost:hover, .cta__primary:hover{ transform:none; }
+  .btn:active, .chip:active{ background:rgba(255,255,255,.16); }
+  .cta__primary:active, .cta__ghost:active{ transform:scale(.98); }
+}

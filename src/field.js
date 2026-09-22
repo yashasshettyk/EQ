@@ -2,7 +2,7 @@
    field.js — the particle field
    ============================================================ */
 
-import { program, buffer, attrib, mat4, mulberry32 } from './gl.js';
+import { buildPrograms, buffer, attrib, mat4, mulberry32 } from './gl.js';
 import * as S from './shaders.js';
 import { BANDS, WAVE } from './audio.js';
 
@@ -36,49 +36,75 @@ export const LOOP = 1020;   // seconds — 6 × 170, divisible by every wisp rat
    `ss` supersamples above the device's own pixel ratio. `edge`
    asks for an absolute long-edge target instead.              */
 export const TIERS = [
-  { id:'balanced', name:'Balanced', dprCap:1.25, ss:1.00, mul:0.46, oct:1 },
-  { id:'high',     name:'High',     dprCap:2.00, ss:1.00, mul:0.76, oct:2 },
-  { id:'ultra',    name:'Ultra',    dprCap:2.00, ss:1.45, mul:1.00, oct:3 },
+  { id:'balanced', name:'Balanced', dprCap:1.25, ss:1.00, mul:0.46, oct:1, mob:0.70 },
+  { id:'high',     name:'High',     dprCap:2.00, ss:1.00, mul:0.76, oct:2, mob:1.00 },
+  { id:'ultra',    name:'Ultra',    dprCap:2.00, ss:1.45, mul:1.00, oct:3, mob:1.00 },
   { id:'max',      name:'8K',       dprCap:2.00, ss:1.00, mul:1.26, oct:3, edge:7680 }
 ];
 
 const BASE = { shell:132000, wisp:46000, ripple:64000, dust:27000, spark:9216 };
-const MAXC = Object.fromEntries(Object.entries(BASE).map(([k,v]) => [k, Math.ceil(v * 1.26)]));
 
-const PIXEL_BUDGET = 35e6;   // RGBA16F scene target ceiling (~280 MB)
+/** Let the browser paint between chunks of work. Building the field is
+    hundreds of milliseconds of array maths and shader linking; done in one
+    go it freezes the page, which on a phone reads as a crash. */
+const breathe = () => new Promise(r => {
+  // Never rAF here. A hidden or backgrounded tab throttles it to about one
+  // frame a second, which turns a short build into a stall that never ends.
+  // A macrotask yields to the event loop and still lets the browser paint.
+  if(globalThis.scheduler?.yield) globalThis.scheduler.yield().then(r);
+  else setTimeout(r, 0);
+});
 
 export class Field {
-  constructor(gl){
+  constructor(gl, profile){
     this.gl = gl;
+    this.profile = profile;
     this.time = 0;
 
-    this.progs = {
-      shell:  program(gl, S.SHELL_VS,  S.POINT_FS, 'shell'),
-      wisp:   program(gl, S.WISP_VS,   S.POINT_FS, 'wisp'),
-      ripple: program(gl, S.RIPPLE_VS, S.POINT_FS, 'ripple'),
-      dust:   program(gl, S.DUST_VS,   S.POINT_FS, 'dust'),
-      spark:  program(gl, S.SPARK_VS,  S.POINT_FS, 'spark')
-    };
+    // Scale the whole field to the device before allocating anything.
+    this.base = Object.fromEntries(Object.entries(BASE)
+      .map(([k, v]) => [k, Math.max(512, Math.round(v * profile.geomScale))]));
+    this.maxc = Object.fromEntries(Object.entries(this.base)
+      .map(([k, v]) => [k, Math.ceil(v * 1.26)]));
 
-    this.counts = { ...BASE };
+    this.counts = { ...this.base };
     this.modeA = 0; this.modeB = 0; this.morph = 0; this.morphRate = 0;
-    this.octaves = 3;
+    this.octaves = profile.octaveCap;
     this.intensity = 1;
     this.radius = 1.62;
     this.specAmp = 0.62;
 
-    this._buildGeometry();
-    this._buildSpectrumTexture();
     this._buildRipples();
     this._buildCamera();
-
     this.setPalette(0);
+  }
+
+  /** Everything expensive, in chunks, with the browser let through between
+      each one. Resolves once the field is ready to draw. */
+  static async create(gl, profile, onStep){
+    const f = new Field(gl, profile);
+
+    onStep?.('shaders');
+    f.progs = await buildPrograms(gl, [
+      { name:'shell',  vs:S.SHELL_VS,  fs:S.POINT_FS },
+      { name:'wisp',   vs:S.WISP_VS,   fs:S.POINT_FS },
+      { name:'ripple', vs:S.RIPPLE_VS, fs:S.POINT_FS },
+      { name:'dust',   vs:S.DUST_VS,   fs:S.POINT_FS },
+      { name:'spark',  vs:S.SPARK_VS,  fs:S.POINT_FS }
+    ], breathe, profile.mobile ? { CHEAP: 1 } : null);
+
+    onStep?.('geometry');
+    await f._buildGeometry();
+
+    f._buildSpectrumTexture();
+    return f;
   }
 
   /* ── geometry ──────────────────────────────────────────── */
 
-  _buildGeometry(){
+  async _buildGeometry(){
     const gl = this.gl;
+    const MAXC = this.maxc;
     const rnd = mulberry32(0x5EED1);
     this.vao = {};
 
@@ -118,7 +144,9 @@ export class Field {
     };
 
     mk('shell',  [['aDir', sphere(MAXC.shell), 3], ['aSeed', seeds(MAXC.shell), 4]], MAXC.shell);
+    await breathe();
     mk('wisp',   [['aDir', sphere(MAXC.wisp),  3], ['aSeed', seeds(MAXC.wisp),  4]], MAXC.wisp);
+    await breathe();
 
     // ripple plane: uniform-area disc sampling
     {
@@ -131,6 +159,7 @@ export class Field {
       }
       mk('ripple', [['aXZ', xz, 2], ['aSeed', seeds(n), 4]], n);
     }
+    await breathe();
 
     // dust volume, biased away from the centre so it reads as depth
     {
@@ -145,6 +174,7 @@ export class Field {
       }
       mk('dust', [['aPos', pos, 3], ['aSeed', seeds(n), 4]], n);
     }
+    await breathe();
 
     // sparks: written from the CPU on each onset, integrated on the GPU
     {
@@ -277,7 +307,7 @@ export class Field {
     const extent = MODES[this.modeB].extent, frac = 0.80;
     const tv = Math.tan(this.fov / 2);
     const th = tv * (this.aspect || 1);
-    return clamp(Math.max(extent / (tv * frac), extent / (th * frac)), 4.6, 15);
+    return clamp(Math.max(extent / (tv * frac), extent / (th * frac)), 4.6, 26);
   }
 
   orbit(dx, dy){
@@ -288,7 +318,7 @@ export class Field {
   }
   dolly(dy){
     this.userDolly = true;
-    this.cam.distTarget = clamp(this.cam.distTarget * (1 + dy * 0.0012), 2.4, 16);
+    this.cam.distTarget = clamp(this.cam.distTarget * (1 + dy * 0.0012), 2.4, 26);
   }
   recentre(){
     this.userDolly = false;
@@ -367,8 +397,9 @@ export class Field {
 
   setTier(tier){
     this.tier = tier;
-    this.octaves = tier.oct;
-    for(const k in BASE) this.counts[k] = Math.min(MAXC[k], Math.round(BASE[k] * tier.mul));
+    this.octaves = Math.min(tier.oct, this.profile.octaveCap);
+    for(const k in this.base)
+      this.counts[k] = Math.min(this.maxc[k], Math.round(this.base[k] * tier.mul));
   }
 
   /** Works out the scene resolution for a tier, honouring the GPU's
@@ -376,13 +407,20 @@ export class Field {
   resolutionFor(tier, cssW, cssH){
     const gl = this.gl;
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    const dpr = Math.min(window.devicePixelRatio || 1, tier.dprCap);
+    const devDpr = Math.min(window.devicePixelRatio || 1, this.profile.dprCap);
+    const dpr = Math.min(devDpr, tier.dprCap);
     let w, h;
 
     if(tier.edge){
       const long = Math.max(cssW, cssH);
       const scale = Math.min(tier.edge / long, 4.5);
       w = cssW * scale; h = cssH * scale;
+    } else if(this.profile.mobile){
+      // Aim at the panel's own pixels. Supersampling a phone is pointless
+      // when the budget caps you below native anyway, and anything under
+      // native reads as a blurred upscale on a dense display.
+      const k = devDpr * (tier.mob ?? 1);   // native pixels, scaled by tier
+      w = cssW * k; h = cssH * k;
     } else {
       w = cssW * dpr * tier.ss; h = cssH * dpr * tier.ss;
     }
@@ -390,8 +428,8 @@ export class Field {
     // clamp to the largest texture the driver will give us
     const k1 = Math.min(1, maxTex / Math.max(w, h));
     w *= k1; h *= k1;
-    // and to the memory budget
-    const k2 = Math.min(1, Math.sqrt(PIXEL_BUDGET / Math.max(1, w * h)));
+    // and to the memory budget this device can actually carry
+    const k2 = Math.min(1, Math.sqrt(this.profile.maxPixels / Math.max(1, w * h)));
     w *= k2; h *= k2;
 
     return { w: Math.max(2, Math.floor(w)), h: Math.max(2, Math.floor(h)) };
@@ -399,9 +437,16 @@ export class Field {
 
   resize(w, h, aspect){
     this.rw = w; this.rh = h; this.aspect = aspect;
+
+    // A tall, narrow screen framed through a 42-degree lens pushes the
+    // subject absurdly far back to fit its width. Widen the lens instead,
+    // the way you would reach for a shorter focal length in a tight room.
+    const deg = aspect < 1 ? 42 + (1 - aspect) * 30 : 42;
+    this.fov = deg * Math.PI / 180;
+
     if(!this.userDolly) this.cam.distTarget = this.fitDistance();
     // Point size in pixels for a unit-sized particle at unit depth.
-    this.pixelScale = (h / (2 * Math.tan(this.fov / 2))) * 0.0045;
+    this.pixelScale = (h / (2 * Math.tan(this.fov / 2))) * 0.0045 * this.profile.sizeScale;
   }
 
   /* ── frame ─────────────────────────────────────────────── */
@@ -431,7 +476,7 @@ export class Field {
     gl.uniform1i(u.uModeA, this.modeA);
     gl.uniform1i(u.uModeB, this.modeB);
     gl.uniform1f(u.uMorph, this.morph);
-    gl.uniform1f(u.uIntensity, this.intensity);
+    gl.uniform1f(u.uIntensity, this.intensity * this.profile.lightScale);
     gl.uniform3fv(u.uPal, this.palLinear);
     gl.uniform4fv(u.uRipples, this.ripples);
   }
@@ -491,15 +536,15 @@ export class Field {
 
     draw('dust');
     // Reflection first, so the water surface reads as lying over it.
-    draw('shell', p => {
+    if(this.profile.reflections) draw('shell', p => {
       gl.uniform1f(p.u.uMirror, 1);
       gl.uniform1f(p.u.uMirrorY, PLANE_Y);
-      gl.uniform1f(p.u.uIntensity, this.intensity * lerp('mirror'));
+      gl.uniform1f(p.u.uIntensity, this.intensity * this.profile.lightScale * lerp('mirror'));
     }, Math.round(this.counts.shell * 0.5));
     draw('ripple', p => {
       gl.uniform1f(p.u.uPlaneY, PLANE_Y);
       gl.uniform1f(p.u.uRippleAmp, 1.42);
-      gl.uniform1f(p.u.uIntensity, this.intensity * lerp('plane'));
+      gl.uniform1f(p.u.uIntensity, this.intensity * this.profile.lightScale * lerp('plane'));
     });
     draw('wisp');
     draw('shell', p => {

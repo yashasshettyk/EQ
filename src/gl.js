@@ -19,6 +19,51 @@ export function getContext(canvas){
   return gl;
 }
 
+/* ── device profile ───────────────────────────────────────────
+   A phone is not a small desktop: it has a fraction of the fill
+   rate and memory bandwidth, and it is usually running on a
+   battery. Everything expensive is sized from this.           */
+export function profileDevice(gl){
+  const coarse = matchMedia?.('(pointer: coarse)').matches ?? false;
+  const short  = Math.min(screen.width, screen.height) < 820;
+  const uaMob  = navigator.userAgentData?.mobile === true;
+  const iPad   = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const mobile = uaMob || (coarse && (short || iPad));
+
+  const cores = navigator.hardwareConcurrency || 4;
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+  const tileGpu = /Adreno|Mali|PowerVR|Apple GPU/i.test(renderer);
+
+  const weak = mobile && (cores <= 4 || /Adreno [1-5]|Mali-[GT][1-6]/i.test(renderer));
+
+  return {
+    mobile, tileGpu, weak, renderer, cores,
+    // geometry budget, as a fraction of the desktop particle counts
+    geomScale:  weak ? 0.20 : mobile ? 0.34 : 1,
+    // hard ceiling on the HDR scene buffer
+    maxPixels:  weak ? 1.1e6 : mobile ? 2.4e6 : 35e6,
+    dprCap:     mobile ? 2 : 2,
+    // the reflection pass doubles the hero draw call; not worth it on a phone
+    reflections: !mobile,
+    octaveCap:  weak ? 1 : mobile ? 2 : 3,
+    // Fewer particles means less total light, so each one carries more.
+    lightScale: weak ? 1.85 : mobile ? 1.55 : 1,
+    sizeScale:  mobile ? 1.16 : 1,
+    // the top tiers are meaningless on a handset
+    maxTier:    mobile ? 1 : 3,
+    defaultTier: weak ? 0 : mobile ? 1 : 2
+  };
+}
+
+/** Splice #define lines in after #version, which must stay on line one. */
+export function withDefines(src, defines){
+  const keys = Object.keys(defines || {});
+  if(!keys.length) return src;
+  const lines = keys.map(k => `#define ${k} ${defines[k]}`).join('\n');
+  return src.replace(/^(#version[^\n]*\n)/, `$1${lines}\n`);
+}
+
 function compile(gl, type, src, label){
   const sh = gl.createShader(type);
   gl.shaderSource(sh, src);
@@ -31,11 +76,26 @@ function compile(gl, type, src, label){
   return sh;
 }
 
-export function program(gl, vsSrc, fsSrc, label='program'){
+/** Start a link without waiting for it. Querying LINK_STATUS forces a
+    synchronous stall until the driver has finished compiling, which on a
+    phone is most of the startup cost. Kicking every program off first and
+    collecting them afterwards lets the driver use its own threads. */
+export function programBegin(gl, vsSrc, fsSrc, label='program'){
   const p  = gl.createProgram();
   const vs = compile(gl, gl.VERTEX_SHADER,   vsSrc, label+':vs');
   const fs = compile(gl, gl.FRAGMENT_SHADER, fsSrc, label+':fs');
   gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+  return { p, vs, fs, label };
+}
+
+export function programReady(gl, h){
+  const ext = gl.__parallelShader ??= gl.getExtension('KHR_parallel_shader_compile');
+  if(!ext) return true;                       // no extension: the query below blocks anyway
+  return gl.getProgramParameter(h.p, ext.COMPLETION_STATUS_KHR);
+}
+
+export function programFinish(gl, h){
+  const { p, vs, fs, label } = h;
   if(!gl.getProgramParameter(p, gl.LINK_STATUS))
     throw new Error(`[${label}] link failed\n${gl.getProgramInfoLog(p)}`);
   gl.deleteShader(vs); gl.deleteShader(fs);
@@ -54,6 +114,29 @@ export function program(gl, vsSrc, fsSrc, label='program'){
     a[info.name] = gl.getAttribLocation(p, info.name);
   }
   return { prog:p, u, a, use(){ gl.useProgram(p); return this; } };
+}
+
+export function program(gl, vsSrc, fsSrc, label='program'){
+  return programFinish(gl, programBegin(gl, vsSrc, fsSrc, label));
+}
+
+/** Link a whole set at once, yielding to the browser while the driver
+    works, so the page keeps painting instead of freezing. */
+export async function buildPrograms(gl, specs, yieldTo, defines){
+  const handles = specs.map(s => programBegin(gl,
+    withDefines(s.vs, defines), withDefines(s.fs, defines), s.name));
+  // Bounded: if the driver never reports completion we fall through and let
+  // the blocking LINK_STATUS query settle it rather than spinning forever.
+  for(let guard = 0; guard < 400; guard++){
+    if(handles.every(h => programReady(gl, h))) break;
+    await yieldTo();
+  }
+  const out = {};
+  for(let i = 0; i < specs.length; i++){
+    out[specs[i].name] = programFinish(gl, handles[i]);
+    await yieldTo();
+  }
+  return out;
 }
 
 /* ── render targets ────────────────────────────────────────── */

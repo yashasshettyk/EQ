@@ -99,7 +99,21 @@ float snoise(vec3 v){
 }
 
 /* Curl of a noise potential — divergence-free, so the field swirls
-   instead of clumping. This is what makes the motion feel alive. */
+   instead of clumping. This is what makes the motion feel alive.
+
+   The full version costs twelve simplex evaluations per call, which a
+   desktop GPU shrugs off and a phone absolutely does not. Under CHEAP we
+   swap in a trig field: not divergence-free, but it swirls convincingly
+   at a twentieth of the cost, and at these amplitudes the difference is
+   not visible. */
+#ifdef CHEAP
+vec3 curl(vec3 p, float e){
+  float a = sin(p.y * 1.7 + p.z * 1.1 + 0.7);
+  float b = sin(p.z * 1.3 - p.x * 1.9 + 2.1);
+  float c = sin(p.x * 1.5 + p.y * 0.9 + 4.2);
+  return normalize(vec3(a - c, b - a, c - b) + 1e-6);
+}
+#else
 vec3 curl(vec3 p, float e){
   vec3 dx = vec3(e, 0.0, 0.0), dy = vec3(0.0, e, 0.0), dz = vec3(0.0, 0.0, e);
   float x0 = snoise(p - dx), x1 = snoise(p + dx);
@@ -115,6 +129,7 @@ vec3 curl(vec3 p, float e){
     (x1 - x0) - (Y1 - Y0)
   ) + 1e-6);
 }
+#endif
 
 /* ── audio sampling (exact texel lerp: no filtering extension needed) ── */
 float fetchRow(float x, int row){
@@ -208,8 +223,12 @@ struct Form {
 float bandOf(vec3 dir, vec4 seed){
   float az = atan(dir.z, dir.x);
   float b  = pow(abs(az) / PI, 0.78);
-  return clamp(b + (seed.w - 0.5) * 0.045 + snoise(dir * 2.6) * 0.030
-                 + dir.y * 0.020, 0.0, 1.0);
+  #ifdef CHEAP
+  float scatter = sin(dir.x * 9.1 + dir.y * 5.3 + dir.z * 7.7) * 0.030;
+  #else
+  float scatter = snoise(dir * 2.6) * 0.030;
+  #endif
+  return clamp(b + (seed.w - 0.5) * 0.045 + scatter + dir.y * 0.020, 0.0, 1.0);
 }
 
 /* Silence still breathes — a slow travelling swell across the bands. */
@@ -302,7 +321,12 @@ Form formCymatic(vec3 dir, vec4 seed){
 
   // Newton steps toward the zero set — this is what draws the figure.
   const float e = 0.012;
-  for(int i = 0; i < 2; i++){
+  #ifdef CHEAP
+  const int STEPS = 1;
+  #else
+  const int STEPS = 2;
+  #endif
+  for(int i = 0; i < STEPS; i++){
     float h  = plateH(p);
     vec2  g  = vec2(plateH(p + vec2(e,0.0)) - h, plateH(p + vec2(0.0,e)) - h) / e;
     p -= g * h / (dot(g, g) + 0.45) * 0.72;

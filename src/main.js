@@ -2,7 +2,7 @@
    main.js — boot, loop, interaction
    ============================================================ */
 
-import { getContext } from './gl.js';
+import { getContext, profileDevice } from './gl.js';
 import { Field, PALETTES, TIERS, MODES } from './field.js';
 import { Post } from './post.js';
 import { AudioEngine, SCENES } from './audio.js';
@@ -21,7 +21,8 @@ const el = {
   btnScene:$('btnScene'), sceneLabel:$('sceneLabel'), sceneChips:$('sceneChips'),
   gain:$('gainRange'), scrub:$('scrub'), scrubFill:$('scrubFill'),
   scrubKnob:$('scrubKnob'), scrubTime:$('scrubTime'),
-  help:$('helpSheet'), toast:$('toast'), drop:$('drop'), picker:$('filePicker')
+  help:$('helpSheet'), toast:$('toast'), drop:$('drop'), picker:$('filePicker'),
+  gainWrap:$('gainWrap')
 };
 
 /* ── persisted preferences ───────────────────────────────── */
@@ -32,16 +33,7 @@ const store = {
 
 /* ── boot ────────────────────────────────────────────────── */
 
-let gl, field, post, audio;
-try{
-  gl    = getContext(el.canvas);
-  field = new Field(gl);
-  post  = new Post(gl);
-  audio = new AudioEngine();
-}catch(err){
-  fatal(err);
-  throw err;
-}
+let gl, field, post, audio, profile;
 
 function fatal(err){
   console.error(err);
@@ -54,17 +46,14 @@ function fatal(err){
 
 /* ── quality ─────────────────────────────────────────────── */
 
-let tierIndex = TIERS.findIndex(t => t.id === store.get('tier', 'ultra'));
+// Desktop and phone run different tier ladders, so the preference is
+// stored per profile — a tier chosen on a laptop must not follow you
+// onto a handset.
+let tierKey = 'tier';
+let storedTier = null;
+let tierIndex = 2;
 if(tierIndex < 0) tierIndex = 2;
-{
-  // An unconfirmed tier from last time means we did not survive it.
-  const pending = store.get('tierPending', null);
-  if(pending){
-    const pi = TIERS.findIndex(t => t.id === pending);
-    if(pi >= 0) tierIndex = Math.max(0, Math.min(tierIndex, pi - 1));
-    store.set('tierPending', null);
-  }
-}
+
 let sceneW = 0, sceneH = 0;
 
 /* The top tiers allocate hundreds of megabytes of render target. If that
@@ -81,10 +70,10 @@ function applyTier(i, { toast: announce = false } = {}){
   el.qLabel.textContent = t.name;
 
   clearTimeout(confirmTimer);
-  store.set('tierPending', t.id);
+  store.set(tierKey + 'Pending', t.id);
   confirmTimer = setTimeout(() => {
-    store.set('tier', t.id);
-    store.set('tierPending', null);
+    store.set(tierKey, t.id);
+    store.set(tierKey + 'Pending', null);
   }, 4000);
 
   resize(true);
@@ -99,6 +88,7 @@ function fmtCount(n){
 }
 
 function resize(force){
+  if(!field) return;
   const cssW = Math.max(1, window.innerWidth);
   const cssH = Math.max(1, window.innerHeight);
   const dpr  = Math.min(window.devicePixelRatio || 1, 2);
@@ -152,8 +142,6 @@ function applyPalette(i, announce){
   if(announce) toast(p.name);
 }
 
-field.intensity = store.get('intensity', 1);
-el.gain.value = field.intensity;
 el.gain.addEventListener('input', () => {
   field.intensity = parseFloat(el.gain.value);
   store.set('intensity', field.intensity);
@@ -264,8 +252,7 @@ if(!navigator.mediaDevices?.getUserMedia){
   document.querySelectorAll('[data-source="mic"]').forEach(b => b.classList.add('is-off'));
 }
 
-audio.onended = kind => { if(kind === 'file') syncTransport(); };
-audio.onbeat = strength => {
+function onBeat(strength){
   // Only one ring per hit, and an off-centre companion just for the
   // strongest ones — more than that and the surface turns to noise.
   field.spawnRipple(0, 0, 0.30 + strength * 0.52);
@@ -273,9 +260,10 @@ audio.onbeat = strength => {
     const a = Math.random() * Math.PI * 2, r = 1.2 + Math.random() * 2.4;
     field.spawnRipple(Math.cos(a)*r, Math.sin(a)*r, 0.14 + strength * 0.20);
   }
-  field.emitSparks(90 + (strength * 260) | 0, strength, audio.centroid);
+  const n = profile.mobile ? 40 + (strength * 90) | 0 : 90 + (strength * 260) | 0;
+  field.emitSparks(n, strength, audio.centroid);
   field.cam.shake = Math.min(1, field.cam.shake + strength * 0.42);
-};
+}
 
 function label(name){
   el.srcLabel.textContent = name;
@@ -352,36 +340,66 @@ function fmtTime(s){
 
 /* ── chrome auto-hide ────────────────────────────────────── */
 
-let hideAt = performance.now() + 4200, manualHide = false;
+const COARSE = matchMedia('(pointer: coarse)').matches;
+const HIDE_AFTER = COARSE ? 7000 : 4200;
+let hideAt = performance.now() + HIDE_AFTER, manualHide = false;
+
 function showChrome(){
   manualHide = false;
   document.body.classList.remove('is-hidden-ui');
-  hideAt = performance.now() + 4200;
+  hideAt = performance.now() + HIDE_AFTER;
 }
 function tickChrome(now){
   if(manualHide || gateOpen) return;
   if(now > hideAt) document.body.classList.add('is-hidden-ui');
 }
-['pointermove','pointerdown','wheel','keydown'].forEach(evt =>
+['pointermove','pointerdown','wheel','keydown','touchstart'].forEach(evt =>
   window.addEventListener(evt, showChrome, { passive:true }));
 
 /* ── pointer: orbit + dolly ──────────────────────────────── */
 
-let dragging = false, lastX = 0, lastY = 0, pointerId = null;
+const touches = new Map();
+let dragging = false, lastX = 0, lastY = 0, pinchDist = 0;
+
 el.canvas.addEventListener('pointerdown', e => {
-  dragging = true; pointerId = e.pointerId;
-  lastX = e.clientX; lastY = e.clientY;
+  touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
   el.canvas.setPointerCapture(e.pointerId);
+  if(touches.size === 1){ dragging = true; lastX = e.clientX; lastY = e.clientY; }
+  else if(touches.size === 2){ dragging = false; pinchDist = spread(); }
 });
+
 el.canvas.addEventListener('pointermove', e => {
+  if(!field || !touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+  if(touches.size >= 2){
+    // Two fingers dolly; one orbits. Same gesture vocabulary as a map.
+    const d = spread();
+    if(pinchDist > 0 && d > 0) field.dolly((pinchDist - d) * 1.9);
+    pinchDist = d;
+    return;
+  }
   if(!dragging) return;
   field.orbit(e.clientX - lastX, e.clientY - lastY);
   lastX = e.clientX; lastY = e.clientY;
 });
-const endDrag = () => { dragging = false; };
+
+function spread(){
+  const [a, b] = [...touches.values()];
+  return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+}
+const endDrag = e => {
+  touches.delete(e.pointerId);
+  if(touches.size < 2) pinchDist = 0;
+  if(touches.size === 0) dragging = false;
+  else { const p = [...touches.values()][0]; lastX = p.x; lastY = p.y; dragging = true; }
+};
 el.canvas.addEventListener('pointerup', endDrag);
 el.canvas.addEventListener('pointercancel', endDrag);
-el.canvas.addEventListener('wheel', e => { e.preventDefault(); field.dolly(e.deltaY); }, { passive:false });
+el.canvas.addEventListener('wheel', e => {
+  if(!field) return;
+  e.preventDefault(); field.dolly(e.deltaY);
+}, { passive:false });
 
 // A resting pointer still nudges the camera — parallax keeps it alive.
 let px = 0, py = 0;
@@ -424,6 +442,17 @@ function toggleFullscreen(){
   else document.documentElement.requestFullscreen?.().catch(()=>{});
 }
 
+/* ── chrome ──────────────────────────────────────────────────
+   The dock holds every control on every screen. On a phone the
+   labels drop away and it becomes a single row of icons — no
+   drawer, no second layer to go looking in. Each tap toasts what
+   it changed, which is what the label was doing anyway. */
+
+// Full screen is not available to web pages on iOS Safari; do not offer it.
+if(!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen){
+  el.btnFull.style.display = 'none';
+}
+
 /* ── toast ───────────────────────────────────────────────── */
 
 let toastTimer = 0;
@@ -442,6 +471,7 @@ function toast(msg){
 
 window.addEventListener('keydown', e => {
   if(e.metaKey || e.ctrlKey || e.altKey) return;
+  if(!field) return;
   const k = e.key;
   if(k === 'Escape'){
     if(!el.help.hidden) el.help.hidden = true;
@@ -479,6 +509,7 @@ let uiAcc = 0;
 
 function frame(now){
   requestAnimationFrame(frame);
+  if(!field) return;
 
   let dt = (now - last) / 1000;
   last = now;
@@ -578,7 +609,7 @@ function kick(){ audio.resume(); holdScreen(); }
 // Keep the field breathing behind the gate so the first frame is alive.
 (function idlePulse(){
   setTimeout(() => {
-    if(!audio.ready){
+    if(field && audio && !audio.ready){
       field.spawnRipple((Math.random()-0.5)*2.6, (Math.random()-0.5)*2.6, 0.22 + Math.random()*0.14);
       field.emitSparks(24, 0.3, 0.3);
     }
@@ -588,21 +619,68 @@ function kick(){ audio.resume(); holdScreen(); }
 
 /* ── go ──────────────────────────────────────────────────── */
 
-document.body.classList.add('is-gate');
-audio.sceneId = store.get('scene', 'drift');
-el.sceneLabel.textContent = audio.scene.name;
-applyMode(store.get('mode', 0), false);
-field.morph = 0; field.morphRate = 0; field.modeA = field.modeB;
-applyPalette(store.get('palette', 0), false);
-applyTier(tierIndex);
-resize(true);
-field.setComposition(gateOffset(), true);
-syncTransport();
-requestAnimationFrame(frame);
+async function boot(){
+  document.body.classList.add('is-gate', 'is-booting');
+  try{
+    gl      = getContext(el.canvas);
+    profile = profileDevice(gl);
+    post    = new Post(gl);
+    audio   = new AudioEngine();
 
-window.__resonance = { gl, field, post, audio, applyTier, applyMode, applyPalette, applyScene,
-  get tier(){ return TIERS[tierIndex]; },
-  get tierIndex(){ return tierIndex; },
-  get scene(){ return [sceneW, sceneH]; } };
+    // Build the field in chunks so the launch screen paints and stays
+    // responsive while the shaders link and the buffers fill.
+    field = await Field.create(gl, profile);
+  }catch(err){
+    fatal(err);
+    return;
+  }
+
+  // On a handset the top tiers are not offered at all.
+  TIERS.length = Math.min(TIERS.length, profile.maxTier + 1);
+
+  tierKey = profile.mobile ? 'tier.m' : 'tier';
+  storedTier = store.get(tierKey, null);
+  const pending = store.get(tierKey + 'Pending', null);
+
+  tierIndex = storedTier ? TIERS.findIndex(t => t.id === storedTier) : -1;
+  if(tierIndex < 0) tierIndex = profile.defaultTier;
+  if(pending){
+    // An unconfirmed tier from last time means we did not survive it.
+    const pi = TIERS.findIndex(t => t.id === pending);
+    if(pi >= 0) tierIndex = Math.max(0, Math.min(tierIndex, pi - 1));
+    store.set(tierKey + 'Pending', null);
+  }
+  tierIndex = Math.max(0, Math.min(tierIndex, profile.maxTier));
+
+  document.body.classList.toggle('is-mobile', profile.mobile);
+
+  audio.sceneId = store.get('scene', 'drift');
+  el.sceneLabel.textContent = audio.scene.name;
+  audio.onended = kind => { if(kind === 'file') syncTransport(); };
+  audio.onbeat = onBeat;
+
+  field.intensity = store.get('intensity', 1);
+  el.gain.value = field.intensity;
+
+  applyMode(store.get('mode', 0), false);
+  field.morph = 0; field.morphRate = 0; field.modeA = field.modeB;
+  applyPalette(store.get('palette', 0), false);
+  applyTier(tierIndex);
+  resize(true);
+  field.setComposition(gateOffset(), true);
+  syncTransport();
+
+  document.body.classList.remove('is-booting');
+  window.__resonance = { gl, field, post, audio, profile,
+    applyTier, applyMode, applyPalette, applyScene,
+    get tier(){ return TIERS[tierIndex]; },
+    get tierIndex(){ return tierIndex; },
+    get scene(){ return [sceneW, sceneH]; } };
+
+  last = performance.now();
+  requestAnimationFrame(frame);
+}
+
+boot();
 
 document.addEventListener('visibilitychange', () => { if(!document.hidden) last = performance.now(); });
