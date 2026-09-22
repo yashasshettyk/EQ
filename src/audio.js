@@ -399,6 +399,24 @@ const SCALES = {
    is part of why they sit differently in the ear. */
 export const HZ = { ut:396, re:417, mi:528, fa:639, sol:741, la:852 };
 
+/* Chord shapes, in semitones. The ninth is what stops a triad sounding
+   like a test tone — it is most of the lushness in this kind of music. */
+const CHORDS = {
+  maj:  [0, 4, 7, 14],
+  min:  [0, 3, 7, 14],
+  maj7: [0, 4, 7, 11],
+  sus:  [0, 5, 7, 14]
+};
+
+/* Progressions as [root semitone, quality]. All of these resolve upward;
+   that is what makes them read as lift rather than as motion. */
+const PROG = {
+  lift:    [[0,'maj'], [7,'maj'], [9,'min'], [5,'maj']],   // I  V  vi IV
+  anthem:  [[9,'min'], [5,'maj'], [0,'maj'], [7,'maj']],   // vi IV I  V
+  open:    [[0,'maj'], [4,'min'], [9,'min'], [5,'maj']],   // I  iii vi IV
+  wide:    [[5,'maj'], [0,'maj'], [7,'maj'], [9,'min']]    // IV I  V  vi
+};
+
 /* Patterns are one bar of sixteenths. Each character is a velocity,
    '0' or '.' is a rest. Everything else in a scene is counted in the
    same sixteenths, so the whole piece stays on one grid. */
@@ -445,6 +463,61 @@ export const SCENES = [
     droneGain:0.14, droneType:'sine', cutoff:340, lfo:0.008, lfoAmt:140,
     noiseGain:0.050, noiseFreq:900, revSec:9.0, revMix:0.78, swellEvery:8,
     binaural:10, breath:5.5, bowlEvery:8, bowlChance:0.45, cueEvery:3 },
+
+  { id:'uplift', name:'Uplift', blurb:'Supersaw trance, four to the floor',
+    root:73.4, scale:'major', step:0.1087, swing:0,
+    pluckEvery:16, pluckChance:0, pluckOct:24, pluckWave:'sine',
+    droneGain:0.035, droneType:'sawtooth', cutoff:420, lfo:0.07, lfoAmt:400,
+    noiseGain:0.016, noiseFreq:7600, revSec:2.8, revMix:0.34, swellEvery:256,
+    sub:true, sidechain:0.78,
+    prog:'lift', chordEvery:2, chordVoices:7, chordDetune:17, chordLevel:0.055,
+    bass:'0.0.0.0.0.0.0.0.', riserEvery:64,
+    drums:{ kick:'9...9...9...9...', snare:'....8.......8...',
+            hat:'..4...4...4...4.', open:'..7...7...7...7.' } },
+
+  { id:'sunroom', name:'Sunroom', blurb:'Warm deep house, easy and bright',
+    root:65.4, scale:'major', step:0.1220, swing:0.10,
+    pluckEvery:8, pluckChance:0.45, pluckOct:24, pluckWave:'triangle', pluckDecay:0.5,
+    droneGain:0.045, droneType:'triangle', cutoff:520, lfo:0.04, lfoAmt:320,
+    noiseGain:0.020, noiseFreq:5600, revSec:3.4, revMix:0.42, swellEvery:128,
+    sub:true, sidechain:0.62,
+    prog:'wide', chordEvery:4, chordVoices:5, chordDetune:11, chordLevel:0.050,
+    bass:'..0...0...0...0.',
+    drums:{ kick:'9...9...9...9...', snare:'....7.......7...',
+            hat:'..5...5...5...5.', rim:'..........4.....' } },
+
+  { id:'horizon', name:'Horizon', blurb:'Progressive house, long and open',
+    root:69.3, scale:'major', step:0.1190, swing:0,
+    pluckEvery:4, pluckChance:0.35, pluckOct:24, pluckWave:'sine', pluckDecay:0.7,
+    droneGain:0.055, droneType:'sawtooth', cutoff:460, lfo:0.03, lfoAmt:560,
+    noiseGain:0.024, noiseFreq:6800, revSec:4.6, revMix:0.50, swellEvery:64,
+    sub:true, sidechain:0.70,
+    prog:'anthem', chordEvery:8, chordVoices:7, chordDetune:14, chordLevel:0.048,
+    bass:'0...0...0...0...', riserEvery:128,
+    drums:{ kick:'9...9...9...9...', hat:'..4.5.4...4.5.4.', open:'......7.......7.' } },
+
+  { id:'neon', name:'Neon', blurb:'Future bass, half-time and huge',
+    root:87.3, scale:'lydian', step:0.0882, swing:0,
+    pluckEvery:16, pluckChance:0.3, pluckOct:24, pluckWave:'triangle', pluckDecay:0.4,
+    droneGain:0.030, droneType:'sawtooth', cutoff:600, lfo:0.12, lfoAmt:700,
+    noiseGain:0.026, noiseFreq:9000, revSec:3.0, revMix:0.44, swellEvery:128,
+    sub:true, sidechain:0.85,
+    prog:'open', chordEvery:2, chordVoices:7, chordDetune:26, chordLevel:0.052,
+    chordWobble:true, bass:'0.......0.......', riserEvery:64,
+    drums:{ kick:'9.......9.......', snare:'........9.......',
+            hat:'..5.4.5...5.4.5.', open:'..............7.' } },
+
+  { id:'voltage', name:'Voltage', blurb:'Melodic techno, hypnotic and steady',
+    root:61.7, scale:'major', step:0.1154, swing:0,
+    pluckEvery:1, pluckChance:1, pluckOct:24, pluckWave:'square', pluckDecay:0.22,
+    arp:[0, 4, 7, 11, 7, 4, 2, 4], arpOct:24,
+    droneGain:0.050, droneType:'sawtooth', cutoff:380, lfo:0.05, lfoAmt:440,
+    noiseGain:0.014, noiseFreq:8200, revSec:2.4, revMix:0.30, swellEvery:128,
+    sub:true, sidechain:0.72,
+    prog:'lift', chordEvery:16, chordVoices:5, chordDetune:9, chordLevel:0.042,
+    bass:'0.0.0.0.0.0.0.0.',
+    drums:{ kick:'9...9...9...9...', hat:'..4...4...4...4.', open:'..............6.',
+            rim:'....5.......5...' } },
 
   { id:'drift', name:'Drift', blurb:'Slow pads, soft kick, brushed hats',
     root:110, scale:'pentMinor', step:0.125, swing:0.14,
@@ -535,11 +608,32 @@ class Ambient {
 
     this.out = ctx.createGain();
     this.out.gain.value = 0.0001;
-    this.out.connect(analyseInto);
-    this.out.connect(monitor);
+
+    /* A limiter on the way out. The busier pieces stack a kick, a sub, a
+       supersaw chord and a hat on the same beat, and the sum clips well
+       before any one of them is too loud. Catching the peaks here is
+       cheaper than keeping every part quiet enough to never collide. */
+    const comp = this.comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -9;
+    comp.knee.value = 8;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.004;
+    comp.release.value = 0.18;
+
+    this.out.connect(comp);
+    comp.connect(analyseInto);
+    comp.connect(monitor);
 
     this.dry = ctx.createGain(); this.dry.gain.value = 0.72;
     this.dry.connect(this.out);
+
+    /* Sidechain bus. Everything harmonic runs through this and the kick
+       ducks it — the pump is most of what makes this kind of music feel
+       like it is moving, and it is doing real work here rather than being
+       an effect painted on top: without it the sub and the kick fight for
+       the same space and both lose. Drums bypass it. */
+    this.duck = ctx.createGain(); this.duck.gain.value = 1;
+    this.duck.connect(this.dry);
 
     this.rev = ctx.createConvolver();
     this.revGain = ctx.createGain();
@@ -547,7 +641,7 @@ class Ambient {
     this.revIn = this.rev;
 
     this.voices = [];
-    this._step = 0; this._timer = 0; this._arp = 0;
+    this._step = 0; this._timer = 0; this._arp = 0; this._bar = 0;
     this._tick = this._tick.bind(this);
   }
 
@@ -578,6 +672,7 @@ class Ambient {
 
   start(){
     const ctx = this.ctx, s = this.scene, t = ctx.currentTime;
+    try{ this.duck.gain.cancelScheduledValues(t); this.duck.gain.setValueAtTime(1, t); }catch{}
     this.rev.buffer = impulse(ctx, s.revSec, 2.4);
     this.revGain.gain.value = s.revMix;
 
@@ -613,7 +708,8 @@ class Ambient {
       });
     }
 
-    lp.connect(bus); bus.connect(this.dry); bus.connect(this.revIn);
+    const harmonic = s.sidechain ? this.duck : this.dry;
+    lp.connect(bus); bus.connect(harmonic); bus.connect(this.revIn);
     this.voices.push(lfo, lfoAmp, lp, bus);
 
     if(s.binaural && ctx.createStereoPanner){
@@ -649,7 +745,7 @@ class Ambient {
       const o = ctx.createOscillator(); o.type = 'sine';
       o.frequency.value = s.root / 2;
       const g = ctx.createGain(); g.gain.value = 0.09;
-      o.connect(g); g.connect(this.dry); o.start(t);
+      o.connect(g); g.connect(s.sidechain ? this.duck : this.dry); o.start(t);
       this.voices.push(o, g);
     }
 
@@ -711,6 +807,18 @@ class Ambient {
         }
       }
 
+      if(n % 16 === 0) this._bar = (n / 16) | 0;
+
+      if(s.prog){
+        const [rootSemi, quality] = this._chord();
+        if(n % (s.chordEvery ?? 4) === 0) this.stab(t, rootSemi, quality);
+        if(s.bass){
+          const i = n % 16;
+          if(i < s.bass.length && s.bass[i] !== '.') this.bassNote(t, rootSemi);
+        }
+        if(s.riserEvery && n % s.riserEvery === s.riserEvery - 16) this.riser(t, 1);
+      }
+
       if(s.bowlEvery && n % s.bowlEvery === 0 && Math.random() < (s.bowlChance ?? 0.5)){
         const sc = this.scaleNotes;
         const semi = sc[(Math.random() * Math.min(5, sc.length)) | 0];
@@ -752,6 +860,7 @@ class Ambient {
     let v;
     if((v = hit(d.kick))){
       this.kick(t, v);
+      if(this.scene.sidechain) this.duckAt(t, this.scene.sidechain * v);
       this._report(t, v);
     }
     if((v = hit(d.snare))){
@@ -870,6 +979,114 @@ class Ambient {
     o.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
     o.start(t); o.stop(t + decay + 0.4);
     o.onended = () => { try{ o.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
+  }
+
+  /** Pull the harmonic bus down on the kick and let it breathe back in.
+      The release is what you actually hear, so it is longer than the dip. */
+  duckAt(t, depth){
+    const g = this.duck.gain;
+    try{
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(Math.max(0.02, 1 - depth), t);
+      g.linearRampToValueAtTime(1, t + 0.20);
+    }catch{}
+  }
+
+  /** The chord under the current bar. */
+  _chord(){
+    const s = this.scene;
+    const prog = PROG[s.prog] || PROG.lift;
+    return prog[this._bar % prog.length];
+  }
+
+  /** A supersaw stab. Seven saws spread a few cents apart is the whole
+      trick — one saw is thin, seven is a wall. */
+  stab(t, rootSemi, quality){
+    const ctx = this.ctx, s = this.scene;
+    const notes = CHORDS[quality] || CHORDS.maj;
+    const voices = s.chordVoices ?? 5;
+    const spread = s.chordDetune ?? 12;
+    const dur = (s.chordEvery ?? 4) * s.step * 0.92;
+
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0.0001, t);
+    bus.gain.exponentialRampToValueAtTime(s.chordLevel ?? 0.05, t + 0.012);
+    bus.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.25);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.Q.value = 1.1;
+    lp.frequency.setValueAtTime(5200, t);
+    lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+
+    bus.connect(lp);
+    lp.connect(s.sidechain ? this.duck : this.dry);
+    lp.connect(this.revIn);
+
+    for(const n of notes){
+      const f = s.root * 4 * Math.pow(2, (rootSemi + n) / 12);
+      if(f > 6000) continue;
+      for(let v = 0; v < voices; v++){
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f;
+        o.detune.value = (v - (voices - 1) / 2) * spread;
+        if(s.chordWobble){
+          // Future bass lives on this: the chord bends under itself.
+          o.detune.setValueAtTime(o.detune.value - 55, t);
+          o.detune.linearRampToValueAtTime(
+            (v - (voices - 1) / 2) * spread, t + dur * 0.55);
+        }
+        const g = ctx.createGain();
+        g.gain.value = 0.9 / (voices * notes.length);
+        o.connect(g); g.connect(bus);
+        o.start(t); o.stop(t + dur + 0.4);
+        o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
+      }
+    }
+    setTimeout(() => { try{ bus.disconnect(); lp.disconnect(); }catch{} },
+               (dur + 1) * 1000);
+  }
+
+  /** Sub bass on the chord root. Short, so it never masks the kick. */
+  bassNote(t, rootSemi){
+    const ctx = this.ctx, s = this.scene;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = s.root * Math.pow(2, rootSemi / 12);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 220; lp.Q.value = 3;
+
+    const g = ctx.createGain();
+    const dur = s.step * 1.5;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.30, t + 0.010);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    o.connect(lp); lp.connect(g); g.connect(s.sidechain ? this.duck : this.dry);
+    o.start(t); o.stop(t + dur + 0.1);
+    o.onended = () => { try{ o.disconnect(); lp.disconnect(); g.disconnect(); }catch{} };
+  }
+
+  /** A riser over the bar before a section turns over. */
+  riser(t, bars){
+    const ctx = this.ctx, s = this.scene;
+    const dur = bars * 16 * s.step;
+
+    const n = ctx.createBufferSource(); n.buffer = this._noise(); n.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 2.6;
+    bp.frequency.setValueAtTime(400, t);
+    bp.frequency.exponentialRampToValueAtTime(11000, t + dur);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.075, t + dur * 0.92);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.12);
+
+    n.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
+    n.start(t); n.stop(t + dur + 0.2);
+    n.onended = () => { try{ n.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
   }
 
   /** A struck bowl. The partials of a real bowl are inharmonic — they are
@@ -991,7 +1208,8 @@ class Ambient {
     setTimeout(() => {
       this._teardownVoices();
       try{ this.out.disconnect(); this.dry.disconnect(); this.rev.disconnect();
-           this.revGain.disconnect(); }catch{}
+           this.revGain.disconnect(); this.duck.disconnect();
+           this.comp.disconnect(); }catch{}
     }, 450);
   }
 }

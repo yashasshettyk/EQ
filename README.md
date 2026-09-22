@@ -60,6 +60,9 @@ is sampled and nothing loops.
 **Calm** — major-family modes, long decays, no hard transients:
 `Solace` · `Theta` · `Meadow` · `Bowls` · `Sunrise` · `Stillwater`
 
+**Uplifting** — major-key electronic, chord progressions that resolve upward:
+`Uplift` · `Sunroom` · `Horizon` · `Neon` · `Voltage`
+
 **Rhythmic** — `Drift` · `Pulse` · `Tide` · `Bloom` · `Glass` · `Rain` ·
 `Choir` · `Circuit` · `Kinetic` · `Lattice`
 
@@ -83,6 +86,29 @@ on headphones, which is why those pieces say so on the label. `Theta` runs at
 
 **Breath.** A reverb send swelling on a 5.5 to 7 second cycle. Nothing clever
 is happening — it is simply something steady to fall into step with.
+
+The uplifting set needed its own three:
+
+**Sidechain.** Everything harmonic runs through a duck bus that the kick
+pulls down and lets breathe back over 200ms. This is most of what makes the
+style feel like it is moving, and it is doing real work rather than being an
+effect painted on top — without it the sub and the kick fight for the same
+space and both lose. Drums bypass it.
+
+**Supersaws.** Seven sawtooths spread a few cents apart, per chord note. One
+saw is thin; seven is a wall. `Neon` bends its detune under itself across the
+first half of each stab, which is the future-bass signature.
+
+**Progressions.** Chords advance once a bar through `I–V–vi–IV` and its
+rotations, with a ninth on every voicing — the ninth is most of the lushness,
+and a bare triad sounds like a test tone by comparison. Sub bass follows the
+chord root on its own pattern, kept short so it never masks the kick. Risers
+sweep the bar before a section turns over.
+
+A limiter sits on the output. The busier pieces stack a kick, a sub, a
+supersaw chord and a hat on the same beat, and the sum clips well before any
+one of them is too loud; catching the peaks is cheaper than keeping every
+part quiet enough never to collide.
 
 A calm piece has no drums, so nothing for the onset detector to find. The
 sequencer instead reports a gentle cue every couple of seconds, which keeps
