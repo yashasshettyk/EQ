@@ -53,12 +53,41 @@ Safari supports microphone and file playback; it does not implement
 
 ## The generative pieces
 
-Each is a parameter set over one engine — scale, register, tempo, timbre,
-space, and a one-bar drum pattern on a sixteenth grid. Nothing is sampled and
-nothing loops.
+Sixteen of them. Each is a parameter set over one engine — scale, register,
+tempo, timbre, space, and a one-bar drum pattern on a sixteenth grid. Nothing
+is sampled and nothing loops.
 
-`Drift` · `Pulse` · `Tide` · `Bloom` · `Glass` · `Rain` · `Choir` · `Circuit`
-· `Kinetic` · `Lattice`
+**Calm** — major-family modes, long decays, no hard transients:
+`Solace` · `Theta` · `Meadow` · `Bowls` · `Sunrise` · `Stillwater`
+
+**Rhythmic** — `Drift` · `Pulse` · `Tide` · `Bloom` · `Glass` · `Rain` ·
+`Choir` · `Circuit` · `Kinetic` · `Lattice`
+
+The calm set leans on consonance rather than atmosphere alone: major and
+lydian scales, perfect fifths, and roots drawn from the solfeggio set (528 Hz
+and friends). There is no physics behind that folklore, but they are pleasant
+roots and sitting off concert pitch is part of why the set lands differently.
+
+Three pieces of synthesis serve them:
+
+**Singing bowls.** A real bowl's partials are inharmonic — not integer
+multiples of the fundamental — and the high ones die away first. Each partial
+is paired with a twin detuned by about three cents, and the slow beating
+between them is what makes a bowl sound alive rather than like a struck bell
+sample.
+
+**Binaural pairs.** Two pure tones a few hertz apart, one hard to each ear.
+The beat is perceived rather than present in either channel, so it only works
+on headphones, which is why those pieces say so on the label. `Theta` runs at
+6 Hz, `Stillwater` at 10.
+
+**Breath.** A reverb send swelling on a 5.5 to 7 second cycle. Nothing clever
+is happening — it is simply something steady to fall into step with.
+
+A calm piece has no drums, so nothing for the onset detector to find. The
+sequencer instead reports a gentle cue every couple of seconds, which keeps
+the ripples moving at a breathing cadence rather than a beat, and leaves the
+field alive without anything ever striking.
 
 Percussion is synthesised: a pitch-dropping sine kick with a filtered click
 transient, band-passed noise snares with a tonal body, and high-passed hats.

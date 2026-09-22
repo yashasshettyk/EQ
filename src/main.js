@@ -727,7 +727,7 @@ async function boot(){
 
   document.body.classList.toggle('is-mobile', profile.mobile);
 
-  audio.sceneId = store.get('scene', 'drift');
+  audio.sceneId = store.get('scene', 'solace');
   el.sceneLabel.textContent = audio.scene.name;
   audio.onended = kind => { if(kind === 'file') syncTransport(); };
   audio.onbeat = onBeat;

@@ -386,13 +386,66 @@ const SCALES = {
   aeolian:   [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24],
   lydian:    [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24],
   dorian:    [0, 2, 3, 5, 7, 9, 10, 12, 14, 15, 17, 19, 21, 22, 24],
-  wholeTone: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
+  wholeTone: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24],
+  // Major-family sets. Consonant thirds and sixths are what make a piece
+  // read as settled rather than searching.
+  major:     [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24],
+  majorPent: [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24],
+  ionian9:   [0, 2, 4, 7, 9, 11, 12, 14, 16, 19, 21, 23, 24]
 };
+
+/* Solfeggio tunings. There is no physics behind the folklore, but they are
+   pleasant roots and they keep these pieces away from concert pitch, which
+   is part of why they sit differently in the ear. */
+export const HZ = { ut:396, re:417, mi:528, fa:639, sol:741, la:852 };
 
 /* Patterns are one bar of sixteenths. Each character is a velocity,
    '0' or '.' is a rest. Everything else in a scene is counted in the
    same sixteenths, so the whole piece stays on one grid. */
 export const SCENES = [
+  { id:'solace', name:'Solace', blurb:'Warm pad and singing bowls · 528 Hz', calm:true,
+    root:HZ.mi/2, scale:'majorPent', step:0.5, swing:0,
+    pluckEvery:8, pluckChance:0.3, pluckOct:12, pluckWave:'sine',
+    droneGain:0.13, droneType:'sine', cutoff:700, lfo:0.014, lfoAmt:260,
+    noiseGain:0.030, noiseFreq:2600, revSec:7.5, revMix:0.72, swellEvery:16,
+    bowlEvery:8, bowlChance:0.6, cueEvery:4, breath:5.5 },
+
+  { id:'theta', name:'Theta', blurb:'6 Hz binaural drone · headphones', calm:true,
+    root:HZ.ut/2, scale:'majorPent', step:0.6, swing:0,
+    pluckEvery:16, pluckChance:0.18, pluckOct:24, pluckWave:'sine',
+    droneGain:0.11, droneType:'sine', cutoff:420, lfo:0.011, lfoAmt:160,
+    noiseGain:0.042, noiseFreq:1200, revSec:8.0, revMix:0.68, swellEvery:16,
+    binaural:6, cueEvery:4, breath:6.0 },
+
+  { id:'meadow', name:'Meadow', blurb:'Bright lydian air, gentle and open', calm:true,
+    root:HZ.sol/4, scale:'lydian', step:0.28, swing:0.16,
+    pluckEvery:4, pluckChance:0.6, pluckOct:24, pluckWave:'sine',
+    droneGain:0.075, droneType:'triangle', cutoff:1100, lfo:0.024, lfoAmt:520,
+    noiseGain:0.048, noiseFreq:6400, revSec:5.4, revMix:0.60, swellEvery:16,
+    drums:{ kick:'4...............', hat:'....2.......2...' } },
+
+  { id:'bowls', name:'Bowls', blurb:'Struck bowls in a very large room', calm:true,
+    root:HZ.fa/4, scale:'majorPent', step:0.75, swing:0,
+    pluckEvery:32, pluckChance:0.12, pluckOct:12, pluckWave:'sine',
+    droneGain:0.09, droneType:'sine', cutoff:520, lfo:0.009, lfoAmt:180,
+    noiseGain:0.022, noiseFreq:2000, revSec:9.0, revMix:0.80, swellEvery:16,
+    bowlEvery:4, bowlChance:0.8, cueEvery:3, breath:7.0 },
+
+  { id:'sunrise', name:'Sunrise', blurb:'Major swells that keep opening upward', calm:true,
+    root:HZ.la/8, scale:'major', step:0.42, swing:0,
+    pluckEvery:6, pluckChance:0.5, pluckOct:24, pluckWave:'triangle',
+    droneGain:0.105, droneType:'sawtooth', cutoff:800, lfo:0.020, lfoAmt:620,
+    noiseGain:0.038, noiseFreq:4800, revSec:6.4, revMix:0.64, swellEvery:8,
+    bowlEvery:32, bowlChance:0.4,
+    drums:{ kick:'5.......4.......' } },
+
+  { id:'stillwater', name:'Stillwater', blurb:'Almost nothing, very slowly', calm:true,
+    root:HZ.re/4, scale:'ionian9', step:0.9, swing:0,
+    pluckEvery:8, pluckChance:0.35, pluckOct:12, pluckWave:'sine',
+    droneGain:0.14, droneType:'sine', cutoff:340, lfo:0.008, lfoAmt:140,
+    noiseGain:0.050, noiseFreq:900, revSec:9.0, revMix:0.78, swellEvery:8,
+    binaural:10, breath:5.5, bowlEvery:8, bowlChance:0.45, cueEvery:3 },
+
   { id:'drift', name:'Drift', blurb:'Slow pads, soft kick, brushed hats',
     root:110, scale:'pentMinor', step:0.125, swing:0.14,
     pluckEvery:4, pluckChance:0.62, pluckOct:12, pluckWave:'triangle',
@@ -563,6 +616,35 @@ class Ambient {
     lp.connect(bus); bus.connect(this.dry); bus.connect(this.revIn);
     this.voices.push(lfo, lfoAmp, lp, bus);
 
+    if(s.binaural && ctx.createStereoPanner){
+      // Two pure tones a few hertz apart, one to each ear. The beat is
+      // perceived rather than present in either channel, so it only works
+      // on headphones — the blurb says so.
+      [[-1, 0], [1, s.binaural]].forEach(([pan, offset]) => {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.value = s.root * 2 + offset;
+        const g = ctx.createGain(); g.gain.value = 0.085;
+        const p = ctx.createStereoPanner(); p.pan.value = pan;
+        o.connect(g); g.connect(p); p.connect(this.dry);
+        o.start(t);
+        this.voices.push(o, g, p);
+      });
+    }
+
+    if(s.breath){
+      // A swell paced to slow breathing. Nothing here is doing anything
+      // clever — it is simply something steady to fall in step with.
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 1 / s.breath;
+      // Keep the swing off zero: a negative gain would flip phase.
+      const depth = ctx.createGain(); depth.gain.value = 0.34;
+      const bed = ctx.createGain(); bed.gain.value = 0.40;
+      lfo.connect(depth); depth.connect(bed.gain);
+      lfo.start(t);
+      bus.connect(bed); bed.connect(this.revIn);
+      this.voices.push(lfo, depth, bed);
+    }
+
     if(s.sub){
       const o = ctx.createOscillator(); o.type = 'sine';
       o.frequency.value = s.root / 2;
@@ -606,7 +688,15 @@ class Ambient {
       const n = this._step, t = this._next;
 
       this.drums(n, t);
-      if(!s.drums && n % 16 === 0) this.pulse(t, 1);
+      if(!s.drums){
+        if(s.calm){
+          // No thump — just a cue often enough that the field keeps
+          // breathing. Eight seconds apart and it reads as frozen.
+          if(n % (s.cueEvery ?? 4) === 0) this._report(t, 0.24 + Math.random() * 0.14);
+        } else if(n % 16 === 0){
+          this.pulse(t, 1);
+        }
+      }
 
       if(n % (s.pluckEvery || 4) === 0){
         if(s.arp){
@@ -619,6 +709,12 @@ class Ambient {
         } else if(Math.random() < s.pluckChance){
           this.pluck(t);
         }
+      }
+
+      if(s.bowlEvery && n % s.bowlEvery === 0 && Math.random() < (s.bowlChance ?? 0.5)){
+        const sc = this.scaleNotes;
+        const semi = sc[(Math.random() * Math.min(5, sc.length)) | 0];
+        this.bowl(t, s.root * 2 * Math.pow(2, semi / 12), 0.8 + Math.random() * 0.5);
       }
 
       if(s.drops && Math.random() < s.drops) this.drop(t);
@@ -764,9 +860,9 @@ class Ambient {
     bp.frequency.exponentialRampToValueAtTime(Math.max(60, f * 1.4), t + 1.1);
 
     const g = ctx.createGain();
-    const peak = 0.09 + Math.random() * 0.07;
+    const peak = (s.calm ? 0.055 : 0.09) + Math.random() * (s.calm ? 0.04 : 0.07);
     const decay = s.pluckDecay ? s.pluckDecay * (0.8 + Math.random() * 0.5)
-                               : 1.4 + Math.random() * 1.4;
+                : (s.calm ? 2.6 + Math.random() * 2.2 : 1.4 + Math.random() * 1.4);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
@@ -774,6 +870,47 @@ class Ambient {
     o.connect(bp); bp.connect(g); g.connect(this.dry); g.connect(this.revIn);
     o.start(t); o.stop(t + decay + 0.4);
     o.onended = () => { try{ o.disconnect(); bp.disconnect(); g.disconnect(); }catch{} };
+  }
+
+  /** A struck bowl. The partials of a real bowl are inharmonic — they are
+      not integer multiples of the fundamental — and the high ones die away
+      first. Pairing each partial with a slightly detuned twin gives the
+      slow shimmer that makes a bowl sound alive rather than like a bell
+      sample. */
+  bowl(t, freq, amp){
+    const ctx = this.ctx;
+    const ratios = [1, 2.71, 5.43, 8.91, 13.3];
+    const decays = [9.5, 6.4, 4.2, 2.8, 1.9];
+
+    ratios.forEach((r, i) => {
+      const level = amp * 0.16 / Math.pow(i + 1, 1.35);
+      const decay = decays[i];
+      [0, 1].forEach(twin => {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.value = freq * r * (twin ? 1.0035 : 1);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(level, t + 0.006 + i * 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+        o.connect(g); g.connect(this.dry); g.connect(this.revIn);
+        o.start(t); o.stop(t + decay + 0.2);
+        o.onended = () => { try{ o.disconnect(); g.disconnect(); }catch{} };
+      });
+    });
+
+    // A breath of air on the strike, so it has an edge to it.
+    const n = ctx.createBufferSource(); n.buffer = this._noise();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = freq * 6; bp.Q.value = 2.2;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.030 * amp, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    n.connect(bp); bp.connect(ng); ng.connect(this.revIn);
+    n.start(t); n.stop(t + 0.35);
+    n.onended = () => { try{ n.disconnect(); bp.disconnect(); ng.disconnect(); }catch{} };
+
+    // A calm piece has no drums, so the bowl is what the field sees.
+    this._report(t, 0.30 + amp * 0.25);
   }
 
   /** A droplet: a very short band-passed noise burst. Dozens a second
