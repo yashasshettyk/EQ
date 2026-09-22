@@ -176,6 +176,13 @@ A second renderer, sharing the GL context, the post chain and the device
 profile with the particle field. Pick it from the same design menu — the
 system as a whole, or any of the nine bodies.
 
+**Desktop only.** On a handset it is not built at all rather than merely
+hidden: constructing it costs about 50 ms on an M4, which on a mid-range
+phone is several hundred milliseconds of blocked startup, and it means six
+more shader programs to link and the geodesic integrator sitting on the
+hardware least able to carry it. A view stored from a desktop session falls
+back to the particle field rather than stranding the phone.
+
 **There are no texture files.** Every surface is evaluated per fragment from
 noise, and the octave count is driven by how much of the screen the body
 fills, so approaching one *adds* detail rather than magnifying what is
@@ -323,6 +330,7 @@ and sizes everything from that.
 | Reflection pass | yes | no |
 | Noise field | 12 simplex evaluations per curl | a trig field, ~20× cheaper |
 | Starting load | 100% | 72%, or 40% on a low-memory device |
+| Solar system | yes | not built |
 
 That last row is the one that matters. The full curl costs twelve simplex
 evaluations per call and runs roughly sixteen times per shell particle — over

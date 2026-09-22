@@ -112,7 +112,7 @@ function resize(force){
   out.w = outW; out.h = outH;
 
   const r = field.resolutionFor(TIERS[tierIndex], cssW, cssH);
-  if(view === 'solar' && solar?.hole){
+  if(view === 'solar' && solar && solar.hole){
     const k = solar.holeScale;
     r.w = Math.max(2, Math.floor(r.w * k));
     r.h = Math.max(2, Math.floor(r.h * k));
@@ -293,6 +293,7 @@ const HOLE_FACTS = [
 ];
 
 function enterSolar(which){
+  if(!solar) return;
   view = 'solar';
   el.solarUI.hidden = false;
   document.body.classList.add('is-solar');
@@ -343,8 +344,8 @@ function enterSolar(which){
 
 function leaveSolar(){
   if(view !== 'solar') return;
-  const wasHole = solar.hole;
-  solar.leaveHole();
+  const wasHole = solar && solar.hole;
+  solar?.leaveHole();
   view = 'field';
   document.body.classList.remove('is-hole');
   if(wasHole) resize(true);
@@ -634,7 +635,7 @@ el.canvas.addEventListener('pointermove', e => {
   if(!field || !touches.has(e.pointerId)) return;
   touches.set(e.pointerId, { x:e.clientX, y:e.clientY });
 
-  const R = view === 'solar' ? solar : field;
+  const R = (view === 'solar' && solar) ? solar : field;
   if(touches.size >= 2){
     // Two fingers dolly; one orbits. Same gesture vocabulary as a map.
     const d = spread();
@@ -662,7 +663,7 @@ el.canvas.addEventListener('pointercancel', endDrag);
 el.canvas.addEventListener('wheel', e => {
   if(!field) return;
   e.preventDefault();
-  (view === 'solar' ? solar : field).dolly(e.deltaY);
+  ((view === 'solar' && solar) ? solar : field).dolly(e.deltaY);
 }, { passive:false });
 
 // A resting pointer still nudges the camera — parallax keeps it alive.
@@ -695,14 +696,16 @@ el.btnForm.addEventListener('click', () => {
   const items = MODES.map(m => ({ id:m.id, name:m.name, blurb:m.blurb, group:m.group }));
   // The system is one more thing you can be looking at, so it belongs in
   // the same list rather than behind a separate switch.
-  items.push({ id:'solar:all', name:'The System', group:'Solar System',
-               blurb:'All nine bodies, seen from outside the orbits' });
-  for(const b of BODIES)
-    items.push({ id:'solar:' + b.id, name:b.name, group:'Solar System', blurb:b.blurb });
-  items.push({ id:'solar:hole', name:'Black Hole', group:'Deep Field',
-               blurb:'Light bent around a Schwarzschild horizon' });
+  if(solar){
+    items.push({ id:'solar:all', name:'The System', group:'Solar System',
+                 blurb:'All nine bodies, seen from outside the orbits' });
+    for(const b of BODIES)
+      items.push({ id:'solar:' + b.id, name:b.name, group:'Solar System', blurb:b.blurb });
+    items.push({ id:'solar:hole', name:'Black Hole', group:'Deep Field',
+                 blurb:'Light bent around a Schwarzschild horizon' });
+  }
 
-  const current = view === 'solar'
+  const current = view === 'solar' && solar
     ? (solar.hole ? 'solar:hole' : 'solar:' + solar.focused.id)
     : MODES[field.modeB].id;
   openMenu(el.btnForm, items, current, id => {
@@ -817,7 +820,7 @@ window.addEventListener('keydown', e => {
       break;
     case 'q': case 'Q': applyTier(tierIndex + 1, { toast:true }); break;
     case 's': case 'S': openGate(); break;
-    case 'r': case 'R': (view === 'solar' ? solar : field).recentre(); break;
+    case 'r': case 'R': ((view === 'solar' && solar) ? solar : field).recentre(); break;
     case 'h': case 'H':
       manualHide = !manualHide;
       document.body.classList.toggle('is-hidden-ui', manualHide);
@@ -851,20 +854,20 @@ function frame(now){
 
   post.beginScene();
   gl.viewport(0, 0, sceneW, sceneH);
-  post.grade(view === 'solar' ? 'solar' : 'field', Math.min(1, dt * 3.5));
+  post.grade((view === 'solar' && solar) ? 'solar' : 'field', Math.min(1, dt * 3.5));
   // Outside the hole the dial tracks the field's load; inside it the
   // governor owns it directly, so it must not be overwritten here.
   if(solar && !solar.hole) solar.quality = field.load;
-  if(view === 'solar') solar.render(dt, audio);
-  else                 field.render(dt, audio);
-  post.render(out.w, out.h, view === 'solar' ? solar.time : field.time);
+  if(view === 'solar' && solar) solar.render(dt, audio);
+  else                          field.render(dt, audio);
+  post.render(out.w, out.h, (view === 'solar' && solar) ? solar.time : field.time);
 
   tickChrome(now);
 
   uiAcc += dt;
   if(uiAcc > 1/30){
     updateUI(uiAcc);
-    if(view === 'solar')
+    if(view === 'solar' && solar)
       el.solarAlt.textContent = solar.hole ? solar.holeAltitudeLabel : solar.altitudeLabel;
     uiAcc = 0;
   }
@@ -1030,7 +1033,12 @@ async function boot(){
     // Build the field in chunks so the launch screen paints and stays
     // responsive while the shaders link and the buffers fill.
     field = await Field.create(gl, profile);
-    solar = new Solar(gl, profile);
+
+    /* The solar system is desktop-only. Not merely hidden — not built:
+       skipping it avoids compiling six more shader programs, which is
+       real time on a phone, and avoids the geodesic integrator entirely
+       on the hardware least able to carry it. */
+    solar = profile.mobile ? null : new Solar(gl, profile);
   }catch(err){
     fatal(err);
     return;
@@ -1071,8 +1079,14 @@ async function boot(){
   field.setComposition(gateOffset(), true);
   syncTransport();
 
-  buildSolarNav();
-  if(store.get('view', 'field') === 'solar') enterSolar(store.get('body', 'earth'));
+  if(solar){
+    buildSolarNav();
+    if(store.get('view', 'field') === 'solar') enterSolar(store.get('body', 'earth'));
+  } else {
+    // A view stored from a desktop session must not strand a phone.
+    view = 'field';
+    el.solarUI.hidden = true;
+  }
 
   document.body.classList.remove('is-booting');
   window.__resonance = { gl, field, solar, post, audio, profile,
