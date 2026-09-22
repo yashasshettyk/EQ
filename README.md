@@ -216,6 +216,49 @@ The post chain carries two grades. Additive particles want a low bloom
 threshold so every point contributes a halo; a lit sphere is the opposite,
 and the same settings smear it into a featureless white ball.
 
+## The black hole
+
+Not part of the solar system, so it is a separate destination rather than a
+tenth body — and it is integrated, not faked. Light near a mass follows a
+geodesic; in the plane containing the camera, the hole and the ray, that
+reduces to
+
+```
+d²u/dφ² = −u + (3/2)·rs·u²        where u = 1/r
+```
+
+Marching that equation per pixel bends each ray properly, which is what
+produces the photon ring, the Einstein ring, and the view of the *far* side
+of the accretion disc lifted over the top of the hole. None of those can be
+painted on; they fall out of the integration. The disc carries a temperature
+gradient (roughly r^−3/4, as a thin disc does) and relativistic beaming, so
+the side rotating toward you is markedly brighter.
+
+Three things it took to make it behave:
+
+**Adaptive stepping.** A fixed step is the source of concentric ring
+artefacts: far out it wastes iterations and close in the path turns faster
+than the step can follow, so rays with slightly different impact parameters
+run out of budget at different points and the discontinuity shows up as a
+ring. Scaling the step by how sharply the path is bending spends the budget
+where it matters.
+
+**Counting exhausted rays as captured.** A ray that simply runs out of
+iterations while still deep in the strong field never got out — it was
+spiralling. Letting it sample the sky instead paints a grey halo exactly
+where the shadow belongs.
+
+**Keeping the governor away from it.** Integrating a geodesic per pixel is
+the most expensive thing in this project, so the governor reacts. But going
+through `setLoad` calls `resize()`, and reallocating every framebuffer
+mid-flight is itself a visible hitch — the governor then sees the stutter it
+just caused and reacts again, a loop that never settles. In this view it
+adjusts the step count instead, which costs nothing to change.
+
+The hole also renders at a fraction of the scene resolution and ramps its
+step count in over the first second. The image is smooth curves and
+gradients, which is exactly what survives the composite's tent filter.
+
 ## Controls
 
 | Key | |

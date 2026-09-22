@@ -667,3 +667,184 @@ void main(){
   vec3 col = mix(thin, dense, band) * (0.35 + band * 0.55) * (0.14 + shadow * 1.15);
   frag = vec4(col * a, a);
 }`;
+
+/* ── black hole ───────────────────────────────────────────────
+   A Schwarzschild hole, integrated rather than faked. Light near
+   a mass follows a geodesic; in the plane containing the camera,
+   the hole and the ray, that reduces to
+
+       d²u/dφ² = −u + (3/2)·rs·u²      where u = 1/r
+
+   Marching that equation bends the ray properly, which is what
+   produces the photon ring, the Einstein ring, and the view of
+   the far side of the accretion disc lifted over the top of the
+   hole. None of those can be painted on.
+   ──────────────────────────────────────────────────────────── */
+export const HOLE_VS = SKY_VS;
+
+export const HOLE_FS = /* glsl */`#version 300 es
+precision highp float;
+${NOISE}
+in vec2 vNdc;
+
+uniform vec3  uRight, uUp, uFwd, uCamPos;
+uniform float uTanHalf, uAspect, uTime, uRs, uSteps, uLevel, uBass;
+uniform vec3  uGalA, uGalB;        // sky basis, so the lensed background matches
+out vec4 frag;
+
+/* The same sky the rest of the system uses, so the lensing bends
+   something real rather than a flat gradient. */
+vec3 skyAt(vec3 rd){
+  vec3 col = vec3(0.0);
+  vec3 g = normalize(vec3(0.34, 0.86, -0.38));
+  float band = abs(dot(rd, g));
+  float toCore = max(dot(rd, normalize(vec3(-0.62, -0.30, 0.72))), 0.0);
+  float plane = exp(-band * band * 34.0);
+  float bulge = pow(toCore, 5.0) * 0.55 + pow(toCore, 22.0) * 1.1;
+  float f = fbm(rd * 22.0, 6, 2.2, 0.55) * 0.5 + 0.5;
+  float milk = plane * (0.30 + f * 0.85) * (0.55 + bulge);
+  float lanes = smoothstep(0.38, 0.66, fbm(rd * 9.0 + 13.0, 5, 2.3, 0.55) * 0.5 + 0.5);
+  milk *= mix(1.0, 0.18, lanes * plane);
+  col += mix(vec3(0.34, 0.40, 0.62), vec3(0.92, 0.86, 0.72), bulge * 0.7) * milk * 0.085;
+  col += vec3(0.55, 0.12, 0.18)
+       * smoothstep(0.58, 0.88, fbm(rd * 3.1 + 41.0, 4, 2.3, 0.55) * 0.5 + 0.5) * plane * 0.055;
+  // Flatter than the ordinary sky on purpose: magnified a hundredfold by
+  // the lensing, a strong gradient turns into visible concentric bands.
+  col += vec3(0.020, 0.026, 0.050) * (0.55 + 0.45 * plane) * 0.75;
+
+  // a few sharp stars, so the lensing has points to smear into arcs
+  float st = fbm(rd * 150.0, 4, 2.4, 0.5) * 0.5 + 0.5;
+  col += vec3(0.85, 0.90, 1.0) * pow(smoothstep(0.80, 0.995, st), 9.0) * 2.2;
+  return col;
+}
+
+/* The accretion disc: hotter and faster inward, with the relativistic
+   beaming that makes the approaching side far brighter than the
+   receding one. */
+vec3 discAt(float r, float phi){
+  float rIn = 3.0 * uRs, rOut = 13.0 * uRs;
+  if(r < rIn || r > rOut) return vec3(0.0);
+
+  float t = (r - rIn) / (rOut - rIn);
+  // Temperature falls roughly as r^-3/4 in a thin disc.
+  float temp = pow(1.0 - t, 0.75);
+  vec3 col = mix(vec3(1.0, 0.36, 0.06), vec3(1.0, 0.92, 0.80), temp);
+  col = mix(col, vec3(0.55, 0.72, 1.0), smoothstep(0.75, 1.0, temp) * 0.55);
+
+  /* Turbulence in the disc's own frame, sheared by its differential
+     rotation. Sampling in (cos φ, sin φ) alone lays down radial spokes,
+     which is a giveaway that the structure is painted rather than
+     orbiting; carrying the radius into the noise coordinate removes
+     them. */
+  float orbit = uTime * 0.9 / pow(max(r / uRs, 1.0), 1.5);
+  float a2 = phi - orbit;
+  vec3 q = vec3(cos(a2), sin(a2), 0.0) * (r / uRs) * 0.55 + vec3(0.0, 0.0, r / uRs * 0.4);
+  float turb = fbm(q * 1.6, 5, 2.2, 0.55) * 0.5 + 0.5;
+  float fine = fbm(q * 5.5 + 11.0, 4, 2.3, 0.5) * 0.5 + 0.5;
+  col *= 0.45 + turb * 0.85 + fine * 0.35;
+
+  // Doppler beaming: the side rotating toward us is boosted hard
+  float beam = 0.30 + 1.55 * pow(max(0.0, 0.5 + 0.5 * sin(phi)), 2.6);
+  col *= beam;
+
+  // soften both edges so the annulus has no hard rim
+  col *= smoothstep(0.0, 0.14, t) * (1.0 - smoothstep(0.62, 1.0, t));
+  return col * (0.42 + uBass * 0.16);
+}
+
+void main(){
+  vec3 rd = normalize(uFwd
+          + uRight * vNdc.x * uTanHalf * uAspect
+          + uUp    * vNdc.y * uTanHalf);
+  vec3 ro = uCamPos;                       // hole sits at the origin
+
+  float r0 = length(ro);
+  vec3 toHole = -ro / r0;
+
+  /* Work in the orbital plane: the one containing the camera, the hole
+     and the ray. e1 points at the hole, e2 is perpendicular in-plane. */
+  vec3 e1 = toHole;
+  vec3 perp = rd - e1 * dot(rd, e1);
+  float pl = length(perp);
+  if(pl < 1e-6){ frag = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec3 e2 = perp / pl;
+
+  // initial conditions in (u, φ)
+  float u = 1.0 / r0;
+  float phi = 0.0;
+  // du/dφ from the ray's angle to the radial direction
+  float cosA = clamp(dot(rd, -e1), -1.0, 1.0);
+  float sinA = clamp(dot(rd,  e2), -1.0, 1.0);
+  float du = -u * cosA / max(1e-5, sinA);
+
+  vec3 col = vec3(0.0);
+  bool captured = false;
+  float lastY = dot(ro, vec3(0.0, 1.0, 0.0));
+  vec3 lastP = ro;
+
+  int steps = int(uSteps);
+
+  for(int i = 0; i < 400; i++){
+    if(i >= steps) break;
+
+    /* Adaptive step. A fixed one is the source of the concentric rings:
+       far from the hole it wastes steps, and near it the path turns
+       faster than the step can follow — so rays with slightly different
+       impact parameters run out of iterations at different points and
+       the discontinuity shows up as a ring. Scaling the step by how
+       sharply the path is bending spends the budget where it matters. */
+    float bend = uRs * u;
+    float dphi = clamp(0.055 * (1.0 - bend * 2.2), 0.006, 0.075);
+
+    float uMid = u + du * dphi * 0.5;
+    float k2 = -uMid + 1.5 * uRs * uMid * uMid;
+    du += k2 * dphi;
+    u  += du * dphi;
+    phi += dphi;
+
+    if(u <= 0.0) break;                      // escaped to infinity
+    float r = 1.0 / u;
+    if(r <= uRs * 1.02){ captured = true; break; }
+    // Once it is far out and still climbing, it is not coming back.
+    if(r > uRs * 400.0 && du < 0.0) break;
+
+    // current point, back in three dimensions
+    vec3 p = (e1 * cos(phi) + e2 * sin(phi)) * -r;
+    float y = dot(p, vec3(0.0, 1.0, 0.0));
+
+    /* Crossing the equatorial plane means passing through the disc.
+       Sampling at the step's end point scallops the disc's edge with the
+       step size; interpolating to where the path actually crosses zero
+       puts the sample where the photon really went. */
+    if(lastY * y < 0.0){
+      float f = lastY / (lastY - y);
+      vec3 x = mix(lastP, p, f);
+      col += discAt(length(x.xz), atan(x.z, x.x));
+    }
+    lastY = y;
+    lastP = p;
+  }
+
+  /* A ray that simply ran out of iterations while still deep in the
+     strong field never got out: it was spiralling. Letting it sample the
+     sky instead paints a grey halo exactly where the shadow belongs. */
+  if(!captured && u * uRs > 0.055 && du > 0.0) captured = true;
+
+  if(!captured){
+    /* Whatever direction the photon was finally travelling is what the
+       pixel is looking at. Differentiating the path:
+
+           p(φ) = −r(φ)·(e1·cos φ + e2·sin φ)
+           dp/dφ = (dr/dφ)·r̂ + r·φ̂ ,   dr/dφ = −u′/u²
+
+       Getting φ̂'s sign wrong here sends every ray backwards, which
+       looks plausible until you notice the sky is mirrored. */
+    vec3 rHat = -(e1 * cos(phi) + e2 * sin(phi));
+    vec3 pHat =  (e1 * sin(phi) - e2 * cos(phi));
+    float rNow = 1.0 / max(u, 1e-6);
+    vec3 v = rHat * (-du * rNow * rNow) + pHat * rNow;
+    col += skyAt(normalize(v));
+  }
+
+  frag = vec4(col, 1.0);
+}`;

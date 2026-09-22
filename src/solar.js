@@ -78,13 +78,26 @@ export class Solar {
     this.bodies = layout();
     this.focus = 3;                    // Earth
     this.focusBlend = 1;
+    // A black hole is not part of the solar system, so it is a separate
+    // destination rather than a tenth body.
+    this.hole = false;
+    this.rs = 1.0;                     // Schwarzschild radius, in scene units
+    /* Integrating a geodesic per pixel is far and away the most expensive
+       thing in this project. At full supersampled resolution it drops
+       frames badly, so the hole renders at a fraction of it and the
+       composite's tent filter resolves the difference — the image is
+       smooth curves and gradients, which is exactly what survives that. */
+    this.holeScale = profile.weak ? 0.26 : profile.mobile ? 0.34 : 0.45;
+    this.holeTime = 0;       // seconds since entering, for the quality ramp
+    this.quality = 1;        // fed from the adaptive governor
 
     this.progs = {
       body: program(gl, SS.BODY_VS, SS.BODY_FS, 'body'),
       ring: program(gl, SS.RING_VS, SS.RING_FS, 'ring'),
       dust: program(gl, DUST_VS, DUST_FS, 'dust'),
       sky:  program(gl, SS.SKY_VS, SS.SKY_FS, 'sky'),
-      orbit: program(gl, SS.ORBIT_VS, SS.ORBIT_FS, 'orbit')
+      orbit: program(gl, SS.ORBIT_VS, SS.ORBIT_FS, 'orbit'),
+      hole: program(gl, SS.HOLE_VS, SS.HOLE_FS, 'hole')
     };
     this.skyVao = gl.createVertexArray();
 
@@ -250,6 +263,18 @@ export class Solar {
     this.cam.userDolly = false;
     this.frameLit();
   }
+  /** Leave the solar system entirely and go and look at one. */
+  viewHole(){
+    this.hole = true;
+    this.holeTime = 0;
+    this.cam.logAltTarget = Math.log(34);
+    this.cam.pitch = 0.16;
+    this.cam.yaw = 0.7;
+    this.cam.yawV = 0; this.cam.pitchV = 0; this.cam.drift = 1;
+    this.cam.userDolly = false;
+  }
+  leaveHole(){ this.hole = false; }
+
   /** System-wide view: far enough out to hold the outermost orbit, and
       no further — a fixed number here is either short or absurd. */
   viewAll(){
@@ -297,6 +322,7 @@ export class Solar {
   render(dt, audio){
     const gl = this.gl;
     this.time += dt;
+    if(this.hole) return this._renderHole(dt, audio);
     this._positions();
 
     const c = this.cam;
@@ -456,6 +482,63 @@ export class Solar {
     gl.depthMask(true);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
+  }
+
+  _renderHole(dt, audio){
+    const gl = this.gl, c = this.cam;
+    this.holeTime += dt;
+    c.yaw   += c.yawV;   c.yawV   *= Math.pow(0.0025, dt);
+    c.pitch += c.pitchV; c.pitchV *= Math.pow(0.0025, dt);
+    c.pitch = clamp(c.pitch, -1.45, 1.45);
+    c.drift = Math.min(1, c.drift + dt * 0.15);
+    c.yaw  += dt * 0.020 * c.drift;
+    // Never inside the photon sphere; from there the view is all hole.
+    c.logAltTarget = clamp(c.logAltTarget, Math.log(4.5), Math.log(400));
+    c.logAlt += (c.logAltTarget - c.logAlt) * Math.min(1, dt * 4.0);
+
+    const dist = this.rs * Math.exp(c.logAlt);
+    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const eye = [Math.sin(c.yaw) * cp * dist, sp * dist, Math.cos(c.yaw) * cp * dist];
+    this.eye = eye;
+
+    const fwd = norm([-eye[0], -eye[1], -eye[2]]);
+    const right = norm(cross(fwd, [0, 1, 0]));
+    const up = cross(right, fwd);
+
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+
+    const H = this.progs.hole;
+    H.use();
+    gl.uniform3fv(H.u.uRight, right);
+    gl.uniform3fv(H.u.uUp, up);
+    gl.uniform3fv(H.u.uFwd, fwd);
+    gl.uniform3fv(H.u.uCamPos, eye);
+    gl.uniform1f(H.u.uTanHalf, Math.tan(this.fov / 2));
+    gl.uniform1f(H.u.uAspect, this.aspect);
+    gl.uniform1f(H.u.uTime, this.time);
+    gl.uniform1f(H.u.uRs, this.rs);
+    // Integrating a geodesic per pixel is the most expensive thing here,
+    // so the step count follows the device rather than a constant.
+    /* Step count is the whole cost. It ramps in over the first second so
+       arriving is smooth rather than a stall, and it rides the same
+       adaptive quality signal the particle field uses, so a device that
+       is struggling simply integrates a shorter path. */
+    const base = this.profile.weak ? 55 : this.profile.mobile ? 80 : 140;
+    const ramp = Math.min(1, this.holeTime / 1.1);
+    const steps = Math.max(36, Math.round(base * (0.40 + 0.60 * ramp) * this.quality));
+    gl.uniform1f(H.u.uSteps, steps);
+    gl.uniform1f(H.u.uLevel, audio.level);
+    gl.uniform1f(H.u.uBass, audio.bass);
+    gl.bindVertexArray(this.skyVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
+  get holeAltitudeLabel(){
+    const r = Math.exp(this.cam.logAlt);
+    return `${r.toFixed(1)} Schwarzschild radii out`;
   }
 
   /** What the panel should say, and how close we are to it. */

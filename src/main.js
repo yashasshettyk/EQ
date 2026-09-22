@@ -112,6 +112,11 @@ function resize(force){
   out.w = outW; out.h = outH;
 
   const r = field.resolutionFor(TIERS[tierIndex], cssW, cssH);
+  if(view === 'solar' && solar?.hole){
+    const k = solar.holeScale;
+    r.w = Math.max(2, Math.floor(r.w * k));
+    r.h = Math.max(2, Math.floor(r.h * k));
+  }
   if(force || r.w !== sceneW || r.h !== sceneH){
     sceneW = r.w; sceneH = r.h;
     post.resize(sceneW, sceneH);
@@ -277,11 +282,51 @@ function applyMode(i, announce){
 
 /* ── the solar system ─────────────────────────────────────── */
 
+const HOLE_FACTS = [
+  ['Horizon',      'The Schwarzschild radius — where escape velocity reaches light speed'],
+  ['Photon ring',  '1.5 rs — the orbit light itself can hold, briefly'],
+  ['Shadow',       'About 2.6 rs across, larger than the horizon because of the lensing'],
+  ['Disc',         'Matter spiralling in, heated by friction to millions of degrees'],
+  ['Beaming',      'The side rotating toward you is boosted; the far side dims'],
+  ['Sagittarius A*','4.3 million solar masses, 26,000 light years away'],
+  ['First image',  'Event Horizon Telescope, M87*, 2019']
+];
+
 function enterSolar(which){
   view = 'solar';
   el.solarUI.hidden = false;
   document.body.classList.add('is-solar');
 
+  if(which === 'hole'){
+    solar.viewHole();
+    el.solarGhost.textContent = 'Black Hole';
+    el.solarOrd.textContent = 'Not of this system';
+    el.solarName.textContent = 'Black Hole';
+    el.solarBlurb.textContent =
+      'A Schwarzschild horizon. The light you see around it is not painted on — '
+      + 'each ray is integrated along its geodesic, which is what produces the '
+      + 'photon ring and lifts the far side of the accretion disc over the top.';
+    el.solarFacts.replaceChildren();
+    for(const [k, v] of HOLE_FACTS){
+      const row = document.createElement('div');
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      row.append(dt, dd);
+      el.solarFacts.appendChild(row);
+    }
+    [...el.solarNav.children].forEach(d => d.classList.remove('is-on'));
+    el.formLabel.textContent = 'Black Hole';
+    document.body.classList.add('is-hole');
+    store.set('view', 'solar'); store.set('body', 'hole');
+    resize(true);
+    showChrome();
+    return;
+  }
+
+  const wasHole = solar.hole;
+  document.body.classList.remove('is-hole');
+  solar.leaveHole();
+  if(wasHole) resize(true);
   if(which === 'all'){ solar.viewAll(); }
   else {
     const i = BODIES.findIndex(b => b.id === which);
@@ -298,7 +343,11 @@ function enterSolar(which){
 
 function leaveSolar(){
   if(view !== 'solar') return;
+  const wasHole = solar.hole;
+  solar.leaveHole();
   view = 'field';
+  document.body.classList.remove('is-hole');
+  if(wasHole) resize(true);
   el.solarUI.hidden = true;
   el.solarPanel.hidden = true;
   el.solarUI.classList.remove('is-open');
@@ -650,8 +699,12 @@ el.btnForm.addEventListener('click', () => {
                blurb:'All nine bodies, seen from outside the orbits' });
   for(const b of BODIES)
     items.push({ id:'solar:' + b.id, name:b.name, group:'Solar System', blurb:b.blurb });
+  items.push({ id:'solar:hole', name:'Black Hole', group:'Deep Field',
+               blurb:'Light bent around a Schwarzschild horizon' });
 
-  const current = view === 'solar' ? 'solar:' + solar.focused.id : MODES[field.modeB].id;
+  const current = view === 'solar'
+    ? (solar.hole ? 'solar:hole' : 'solar:' + solar.focused.id)
+    : MODES[field.modeB].id;
   openMenu(el.btnForm, items, current, id => {
     if(id.startsWith('solar:')) enterSolar(id.slice(6));
     else { leaveSolar(); applyMode(MODES.findIndex(m => m.id === id), false); }
@@ -799,6 +852,9 @@ function frame(now){
   post.beginScene();
   gl.viewport(0, 0, sceneW, sceneH);
   post.grade(view === 'solar' ? 'solar' : 'field', Math.min(1, dt * 3.5));
+  // Outside the hole the dial tracks the field's load; inside it the
+  // governor owns it directly, so it must not be overwritten here.
+  if(solar && !solar.hole) solar.quality = field.load;
   if(view === 'solar') solar.render(dt, audio);
   else                 field.render(dt, audio);
   post.render(out.w, out.h, view === 'solar' ? solar.time : field.time);
@@ -808,7 +864,8 @@ function frame(now){
   uiAcc += dt;
   if(uiAcc > 1/30){
     updateUI(uiAcc);
-    if(view === 'solar') el.solarAlt.textContent = solar.altitudeLabel;
+    if(view === 'solar')
+      el.solarAlt.textContent = solar.hole ? solar.holeAltitudeLabel : solar.altitudeLabel;
     uiAcc = 0;
   }
 
@@ -856,6 +913,23 @@ function govern(now, dt){
   const sorted = perf.win.slice().sort((a, b) => a - b);
   const median = sorted[sorted.length >> 1];
   perf.win.length = 0;
+
+  /* The black hole has its own dial — integration steps — which costs
+     nothing to change. Going through setLoad here would call resize(),
+     and reallocating every framebuffer mid-flight is itself a visible
+     hitch: the governor would then see the stutter it had just caused
+     and react to it again, a loop that never settles. */
+  if(view === 'solar' && solar && solar.hole){
+    if(median > SLOW_MS && now > perf.nextDown){
+      solar.quality = Math.max(0.35, solar.quality * 0.78);
+      perf.nextDown = now + 900;
+      perf.nextUp = now + 6000;
+    } else if(median < FAST_MS && solar.quality < 1 && now > perf.nextUp){
+      solar.quality = Math.min(1, solar.quality * 1.15);
+      perf.nextUp = now + 1800;
+    }
+    return;
+  }
 
   if(median > SLOW_MS && now > perf.nextDown){
     if(field.setLoad(field.load * 0.72)){

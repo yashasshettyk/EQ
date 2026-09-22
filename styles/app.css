@@ -896,3 +896,7 @@ body.is-booting .eyebrow span{ animation-duration:1s; }
   .solar__foot{ bottom:calc(var(--safe-b) + 86px); }
   .solar__nav{ gap:9px; }
 }
+
+/* The dot navigator belongs to the solar system; a black hole is not in it. */
+body.is-hole .solar__nav,
+body.is-hole .solar__rail{ opacity:0; pointer-events:none; }
