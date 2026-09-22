@@ -34,10 +34,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return                       # keep the console readable
         super().log_message(fmt, *args)
 
+    def handle_one_request(self):
+        """A reload mid-transfer aborts the socket. Untrapped, that kills
+        the serving thread and — often enough — takes the server with it,
+        which shows up as ERR_CONNECTION_RESET and a stale module cache."""
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
 
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        """Never let one bad connection end the process."""
+        import sys
+        exc = sys.exc_info()[0]
+        if exc in (BrokenPipeError, ConnectionResetError):
+            return
+        super().handle_error(request, client_address)
 
 
 if __name__ == "__main__":

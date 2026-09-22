@@ -391,6 +391,29 @@ is stored per profile, so a tier chosen on a laptop never follows you onto a
 handset. Two fingers dolly, one orbits. Safe-area insets are respected, and
 full screen is hidden where the browser has no such thing.
 
+## Music only
+
+A switch in Controls (`B`) that stops the renderer outright — no canvas, no
+`requestAnimationFrame`, no per-frame JavaScript. Measured: **zero animation
+frames scheduled over two seconds** while the audio kept playing and the
+sequencer kept advancing. A single CSS gradient carries the screen, which the
+browser composites without waking the page.
+
+It also *releases* the screen wake lock that the visual modes hold. That lock
+exists so an unattended display does not sleep, and it is exactly wrong here:
+the point of this mode is that the phone can switch the screen off and keep
+playing.
+
+Media Session is wired up, so the piece name, play/pause and previous/next
+appear on the lock screen and on headphone controls.
+
+**On iOS this has a limit worth stating.** Safari suspends Web Audio when the
+screen locks, and synthesised audio has no media element for iOS to keep
+alive, so there is no way around it from a web page. The mode says so on
+screen rather than pretending otherwise. Android and desktop keep playing with
+the screen off; on iOS, a dropped-in audio file will continue where the
+generative pieces will not, because that is a real `<audio>` element.
+
 ## Running it for days
 
 The clock is wrapped at a fixed 1020-second period, and every animated term is

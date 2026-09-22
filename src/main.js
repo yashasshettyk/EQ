@@ -25,6 +25,10 @@ const el = {
   scrubKnob:$('scrubKnob'), scrubTime:$('scrubTime'),
   help:$('helpSheet'), toast:$('toast'), drop:$('drop'), picker:$('filePicker'),
   gainWrap:$('gainWrap'),
+  np:$('nowPlaying'), npTitle:$('npTitle'), npGroup:$('npGroup'),
+  npBlurb:$('npBlurb'), npBars:$('npBars'), npPrev:$('npPrev'),
+  npPlay:$('npPlay'), npNext:$('npNext'), npExit:$('npExit'), npNote:$('npNote'),
+  btnMusicOnly:$('btnMusicOnly'),
   solarUI:$('solarUI'), solarGhost:$('solarGhost'), solarNav:$('solarNav'),
   solarPrev:$('solarPrev'), solarNext:$('solarNext'), solarAlt:$('solarAlt'),
   solarDiscover:$('solarDiscover'), solarPanel:$('solarPanel'),
@@ -424,6 +428,7 @@ function applyScene(id, announce){
   const s = audio.setScene(id);
   el.sceneLabel.textContent = s.name;
   store.set('scene', s.id);
+  if(musicOnly) syncNowPlaying(); else setMediaSession();
   if(announce) toast(`${s.name} — ${s.blurb}`);
   return s;
 }
@@ -468,6 +473,7 @@ async function pick(kind){
       label('Ambient');
     }
     closeGate();
+    if(musicOnly) syncNowPlaying(); else setMediaSession();
   }catch(err){
     console.warn(err);
     const msg = err?.name === 'NotAllowedError'
@@ -570,6 +576,8 @@ function gateOffset(){
 /* ── transport ───────────────────────────────────────────── */
 
 function syncTransport(){
+  if('mediaSession' in navigator)
+    try{ navigator.mediaSession.playbackState = audio.playing ? 'playing' : 'paused'; }catch{}
   const isFile = audio.kind === 'file';
   el.scrub.classList.toggle('is-on', isFile);
   el.btnScene.style.display = audio.kind === 'ambient' ? '' : 'none';
@@ -821,6 +829,7 @@ window.addEventListener('keydown', e => {
     case 'q': case 'Q': applyTier(tierIndex + 1, { toast:true }); break;
     case 's': case 'S': openGate(); break;
     case 'r': case 'R': ((view === 'solar' && solar) ? solar : field).recentre(); break;
+    case 'b': case 'B': setMusicOnly(!musicOnly); break;
     case 'h': case 'H':
       manualHide = !manualHide;
       document.body.classList.toggle('is-hidden-ui', manualHide);
@@ -831,6 +840,117 @@ window.addEventListener('keydown', e => {
   }
 });
 
+/* ── music only ───────────────────────────────────────────────
+   Stops the renderer outright: no canvas, no rAF, no per-frame
+   work. A CSS gradient carries the screen, the browser composites
+   it, and the phone is free to switch the display off — which is
+   the entire point, and why this mode also *releases* the wake
+   lock the visual modes hold. */
+
+let musicOnly = false, rafId = 0, musicTimer = 0;
+
+function setMusicOnly(on, { announce = true } = {}){
+  musicOnly = !!on;
+  document.body.classList.toggle('is-music', musicOnly);
+  el.np.hidden = !musicOnly;
+  el.btnMusicOnly.setAttribute('aria-checked', String(musicOnly));
+  store.set('musicOnly', musicOnly);
+
+  clearInterval(musicTimer);
+  if(musicOnly){
+    if(rafId){ cancelAnimationFrame(rafId); rafId = 0; }
+    releaseScreen();                      // let the phone sleep
+    syncNowPlaying();
+    // A slow tick only while the screen is actually being looked at.
+    musicTimer = setInterval(tickMusic, 200);
+    if(announce) toast('Visuals off — audio keeps playing');
+  } else {
+    holdScreen();
+    startLoop();
+    if(announce) toast('Visuals on');
+  }
+  syncTransport();
+}
+
+function tickMusic(){
+  if(document.visibilityState !== 'visible') return;   // nothing at all in the pocket
+  audio.update(0.2);
+  const spec = audio.spectrum;
+  el.npBars.children.length && [...el.npBars.children].forEach((b, i) => {
+    const v = spec[Math.round((i / (el.npBars.children.length - 1)) * 0.74 * spec.length) | 0] || 0;
+    // Calm pieces sit low in the meter; a little gain keeps it alive
+    // without ever pinning.
+    b.style.setProperty('--h', Math.min(1, Math.pow(v, 0.72) * 1.45).toFixed(3));
+  });
+  el.npPlay.classList.toggle('is-playing', audio.playing);
+  document.body.classList.toggle('is-playing', audio.playing);
+}
+
+function groupOfScene(sc){
+  return sc.prog ? 'Uplifting'
+       : (sc.drops || sc.noiseGain > 0.06) ? 'Texture'
+       : sc.calm ? 'Calm' : 'Rhythmic';
+}
+
+function syncNowPlaying(){
+  const ambient = audio.kind === 'ambient';
+  const sc = ambient ? audio.scene : null;
+  el.npTitle.textContent = ambient ? sc.name : (audio.trackName || sourceLabel());
+  el.npGroup.textContent = ambient ? groupOfScene(sc) : sourceLabel();
+  el.npBlurb.textContent = ambient ? sc.blurb : '';
+  el.npPrev.style.display = el.npNext.style.display = ambient ? '' : 'none';
+  el.npNote.textContent = BACKGROUND_NOTE;
+  setMediaSession();
+}
+
+function sourceLabel(){
+  return { system:'System Audio', mic:'Microphone', file:'Audio File', ambient:'Ambient' }[audio.kind] || 'Idle';
+}
+
+/* Honest about the platform. Safari suspends Web Audio when the screen
+   locks, and synthesised audio has no media element for iOS to keep
+   alive, so there is no way round it from a web page. */
+const BACKGROUND_NOTE = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  ? 'On iOS, Safari pauses synthesised audio when the screen locks. Keep the screen on, or play an audio file instead — files continue in the background.'
+  : 'Safe to lock the screen — playback continues.';
+
+/* Lock-screen and headphone controls. */
+function setMediaSession(){
+  if(!('mediaSession' in navigator)) return;
+  const ambient = audio.kind === 'ambient';
+  const sc = ambient ? audio.scene : null;
+  try{
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  ambient ? sc.name : (audio.trackName || sourceLabel()),
+      artist: 'Resonance',
+      album:  ambient ? groupOfScene(sc) + ' · generative' : sourceLabel()
+    });
+    navigator.mediaSession.playbackState = audio.playing ? 'playing' : 'paused';
+    navigator.mediaSession.setActionHandler('play',  () => { audio.toggle(); afterTransport(); });
+    navigator.mediaSession.setActionHandler('pause', () => { audio.toggle(); afterTransport(); });
+    navigator.mediaSession.setActionHandler('nexttrack',     ambient ? () => stepScene( 1) : null);
+    navigator.mediaSession.setActionHandler('previoustrack', ambient ? () => stepScene(-1) : null);
+  }catch{}
+}
+
+function stepScene(dir){
+  const i = SCENES.findIndex(x => x.id === audio.sceneId);
+  const next = SCENES[(i + dir + SCENES.length) % SCENES.length].id;
+  applyScene(next, !musicOnly);
+  syncNowPlaying();
+}
+
+function afterTransport(){
+  setTimeout(() => { syncTransport(); if(musicOnly) syncNowPlaying(); }, 30);
+}
+
+el.btnMusicOnly.addEventListener('click', () => setMusicOnly(!musicOnly));
+el.npExit.addEventListener('click', () => setMusicOnly(false));
+el.npPlay.addEventListener('click', () => { audio.toggle(); afterTransport(); });
+el.npPrev.addEventListener('click', () => stepScene(-1));
+el.npNext.addEventListener('click', () => stepScene(1));
+
 /* ── frame loop ──────────────────────────────────────────── */
 
 let last = performance.now();
@@ -838,7 +958,8 @@ let fpsAcc = 0, fpsN = 0, governorAt = performance.now() + 9000;
 let uiAcc = 0;
 
 function frame(now){
-  requestAnimationFrame(frame);
+  if(musicOnly){ rafId = 0; return; }
+  rafId = requestAnimationFrame(frame);
   if(!field) return;
 
   let dt = (now - last) / 1000;
@@ -988,6 +1109,8 @@ function updateUI(){
 let wakeLock = null;
 
 async function holdScreen(){
+  // Music-only exists so the screen *can* sleep; never fight that.
+  if(musicOnly) return;
   if(!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
   if(wakeLock) return;
   try{
@@ -1001,8 +1124,11 @@ function releaseScreen(){
 }
 
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible'){ if(audio.ready) holdScreen(); }
-  else releaseScreen();
+  if(document.visibilityState === 'visible'){
+    if(audio.ready && !musicOnly) holdScreen();
+    // Coming back from the background, the context may have been suspended.
+    audio.resume();
+  } else releaseScreen();
 });
 
 /* ── idle life before any source is chosen ───────────────── */
@@ -1090,14 +1216,23 @@ async function boot(){
 
   document.body.classList.remove('is-booting');
   window.__resonance = { gl, field, solar, post, audio, profile,
-    enterSolar, leaveSolar, get view(){ return view; },
+    enterSolar, leaveSolar, setMusicOnly,
+    get view(){ return view; },
+    get musicOnly(){ return musicOnly; },
+    get wakeLockHeld(){ return !!wakeLock; },
     applyTier, applyMode, applyPalette, applyScene,
     get tier(){ return TIERS[tierIndex]; },
     get tierIndex(){ return tierIndex; },
     get scene(){ return [sceneW, sceneH]; } };
 
+  setMusicOnly(store.get('musicOnly', false), { announce:false });
+  startLoop();
+}
+
+function startLoop(){
+  if(rafId || musicOnly) return;
   last = performance.now();
-  requestAnimationFrame(frame);
+  rafId = requestAnimationFrame(frame);
 }
 
 boot();

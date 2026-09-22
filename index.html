@@ -182,11 +182,48 @@
     </aside>
   </div>
 
+  <!-- ─────────────────────── Music only ─────────────────────── -->
+  <section class="np" id="nowPlaying" hidden>
+    <div class="np__aura" aria-hidden="true"></div>
+    <div class="np__inner">
+      <p class="np__eyebrow"><span class="np__pip"></span><i id="npGroup">Calm</i></p>
+      <h2 class="np__title" id="npTitle">Solace</h2>
+      <p class="np__blurb" id="npBlurb"></p>
+
+      <div class="np__bars" id="npBars" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+
+      <div class="np__transport">
+        <button class="np__btn" id="npPrev" aria-label="Previous piece">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h2.2v12H7zM19 6.4v11.2L10.6 12z"/></svg>
+        </button>
+        <button class="np__btn np__btn--play" id="npPlay" aria-label="Play or pause">
+          <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6l11-6.8z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="7.5" y="5.5" width="3.2" height="13" rx="1.1"/><rect x="13.3" y="5.5" width="3.2" height="13" rx="1.1"/></svg>
+        </button>
+        <button class="np__btn" id="npNext" aria-label="Next piece">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.8 6H17v12h-2.2zM5 6.4v11.2L13.4 12z"/></svg>
+        </button>
+      </div>
+
+      <p class="np__note" id="npNote"></p>
+      <button class="np__exit" id="npExit">Show the visuals</button>
+    </div>
+  </section>
+
   <!-- ───────────────────────── Sheets ───────────────────────── -->
   <div class="sheet" id="helpSheet" hidden>
     <div class="sheet__card">
       <h2>Controls</h2>
       <div class="sheet__row" id="sheetIntensity"><span>Glow</span></div>
+      <div class="sheet__row">
+        <span>Music only</span>
+        <button class="toggle" id="btnMusicOnly" role="switch" aria-checked="false">
+          <i></i>
+        </button>
+      </div>
       <dl>
         <div><dt>Space</dt><dd>Play / pause</dd></div>
         <div><dt>F</dt><dd>Full screen</dd></div>
