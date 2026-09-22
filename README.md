@@ -266,6 +266,28 @@ The hole also renders at a fraction of the scene resolution and ramps its
 step count in over the first second. The image is smooth curves and
 gradients, which is exactly what survives the composite's tent filter.
 
+## Stock
+
+A hundred pieces, fifty-three designs and twenty-five pairings is more surface
+than a popover can carry, so there is a browser for it — reached from the
+launch screen as a fourth source beside System Audio, Microphone and Audio
+File, or from *Browse all* at the top of the Collections menu.
+
+Three tabs — **Collections**, **Sounds**, **Particles** — with a search across
+names and descriptions. One tap applies and starts playing.
+
+**Collections** are curated pairings: a piece, a design and a palette chosen
+to go together, so the pieces that suit a given form are not something you
+have to find by hand. `Meditation` is singing bowls over a slow mandala;
+`Night Drive` is a club beat through a radial fountain; `Undertow` is the
+lowest drone in the library circulating through a torus. Each card shows the
+palette and the two parts it will set.
+
+The table is validated against the real piece, design and palette ids at
+startup and anything that does not resolve is dropped with a warning. A typo
+there would otherwise be a silent no-op at the far end, which is a miserable
+thing to track down.
+
 ## Controls
 
 | Key | |

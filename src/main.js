@@ -8,6 +8,7 @@ import { Post } from './post.js';
 import { Solar } from './solar.js';
 import { BODIES } from './bodies.js';
 import { AudioEngine, SCENES } from './audio.js';
+import { COLLECTIONS, validate } from './collections.js';
 
 const $ = id => document.getElementById(id);
 const el = {
@@ -29,6 +30,10 @@ const el = {
   npBlurb:$('npBlurb'), npBars:$('npBars'), npPrev:$('npPrev'),
   npPlay:$('npPlay'), npNext:$('npNext'), npExit:$('npExit'), npNote:$('npNote'),
   btnMusicOnly:$('btnMusicOnly'),
+  btnCollections:$('btnCollections'), npCollections:$('npCollections'),
+  ctaStock:$('ctaStock'), stock:$('stock'), stockClose:$('stockClose'),
+  stockTabs:$('stockTabs'), stockFind:$('stockFind'),
+  stockBody:$('stockBody'), stockEmpty:$('stockEmpty'),
   solarUI:$('solarUI'), solarGhost:$('solarGhost'), solarNav:$('solarNav'),
   solarPrev:$('solarPrev'), solarNext:$('solarNext'), solarAlt:$('solarAlt'),
   solarDiscover:$('solarDiscover'), solarPanel:$('solarPanel'),
@@ -274,6 +279,152 @@ document.addEventListener('pointerdown', e => {
     closeMenu();
 }, true);
 window.addEventListener('resize', closeMenu);
+
+/* ── collections ──────────────────────────────────────────── */
+
+const COLL = validate(
+  COLLECTIONS,
+  new Set(SCENES.map(s => s.id)),
+  new Set(MODES.map(m => m.id)),
+  new Set(PALETTES.map(p => p.id))
+);
+
+function applyCollection(id){
+  const c = COLL.find(x => x.id === id);
+  if(!c) return;
+  leaveSolar();
+  applyScene(c.scene, false);
+  applyMode(MODES.findIndex(m => m.id === c.mode), false);
+  applyPalette(PALETTES.findIndex(p => p.id === c.palette), false);
+  store.set('collection', c.id);
+  // If nothing is playing yet, a collection should start it.
+  if(audio.kind !== 'ambient') pick('ambient');
+  if(musicOnly) syncNowPlaying();
+  toast(`${c.name} — ${c.blurb}`);
+}
+
+function openCollections(anchor){
+  const items = [{ id:'__all', name:'Browse all', group:'Shelf',
+                   blurb:'Every piece, design and pairing' }]
+    .concat(COLL.map(c => ({ id:c.id, name:c.name, blurb:c.blurb, group:c.group })));
+  openMenu(anchor, items, store.get('collection', null),
+    id => id === '__all' ? openStock() : applyCollection(id));
+}
+
+el.btnCollections.addEventListener('click', () => openCollections(el.btnCollections));
+el.npCollections.addEventListener('click', () => openCollections(el.npCollections));
+
+/* ── the stock browser ────────────────────────────────────────
+   A hundred pieces, fifty-three designs and twenty-five pairings
+   is more than a popover can carry. This is the full shelf:
+   three tabs, a search, and one tap to apply. */
+
+let stockTab = 'collections';
+
+function openStock(){
+  el.stock.hidden = false;
+  el.stockFind.value = '';
+  renderStock();
+  // Focusing on a phone would throw the keyboard up over the list.
+  if(!COARSE) setTimeout(() => el.stockFind.focus(), 80);
+}
+function closeStock(){ el.stock.hidden = true; }
+
+function stockRows(){
+  const q = el.stockFind.value.trim().toLowerCase();
+  const hit = (...fields) => !q || fields.some(f => (f || '').toLowerCase().includes(q));
+
+  if(stockTab === 'collections')
+    return COLL.filter(c => hit(c.name, c.blurb, c.group)).map(c => ({
+      id:c.id, name:c.name, blurb:c.blurb, group:c.group,
+      parts:[sceneName(c.scene), modeName(c.mode)],
+      swatch:PALETTES.find(p => p.id === c.palette)?.stops[2],
+      on:store.get('collection', null) === c.id,
+      go:() => applyCollection(c.id)
+    }));
+
+  if(stockTab === 'pieces')
+    return SCENES.filter(sc => hit(sc.name, sc.blurb)).map(sc => ({
+      id:sc.id, name:sc.name, blurb:sc.blurb, group:groupOfScene(sc),
+      on:audio.sceneId === sc.id,
+      go:() => { applyScene(sc.id, false); startStock(sc.name); }
+    }));
+
+  return MODES.filter(m => hit(m.name, m.blurb, m.group)).map((m, i) => ({
+    id:m.id, name:m.name, blurb:m.blurb, group:m.group,
+    on:MODES[field.modeB].id === m.id,
+    go:() => {
+      leaveSolar();
+      applyMode(MODES.findIndex(x => x.id === m.id), false);
+      startStock(m.name);
+    }
+  }));
+}
+
+const sceneName = id => SCENES.find(s => s.id === id)?.name || id;
+const modeName  = id => MODES.find(m => m.id === id)?.name || id;
+
+/** Choosing anything from the shelf should start something playing. */
+function startStock(label){
+  closeStock();
+  if(!audio.ready) pick('ambient');
+  else if(gateOpen) closeGate();
+  toast(label);
+}
+
+function renderStock(){
+  const rows = stockRows();
+  el.stockBody.replaceChildren();
+  el.stockEmpty.hidden = rows.length > 0;
+
+  let lastGroup = null, grid = null;
+  for(const r of rows){
+    if(r.group !== lastGroup){
+      lastGroup = r.group;
+      const h = document.createElement('div');
+      h.className = 'stock__group';
+      h.textContent = r.group;
+      el.stockBody.appendChild(h);
+      grid = document.createElement('div');
+      grid.className = 'stock__grid';
+      el.stockBody.appendChild(grid);
+    }
+
+    const b = document.createElement('button');
+    b.className = 'stock__card' + (r.on ? ' is-on' : '');
+    const nm = document.createElement('b'); nm.textContent = r.name;
+    b.appendChild(nm);
+    if(r.blurb){ const d = document.createElement('i'); d.textContent = r.blurb; b.appendChild(d); }
+    if(r.parts){
+      const row = document.createElement('div');
+      row.className = 'stock__parts';
+      if(r.swatch){
+        const sw = document.createElement('span');
+        sw.className = 'stock__sw';
+        sw.style.background = r.swatch;
+        row.appendChild(sw);
+      }
+      for(const p of r.parts){
+        const t = document.createElement('span'); t.textContent = p; row.appendChild(t);
+      }
+      b.appendChild(row);
+    }
+    b.addEventListener('click', r.go);
+    grid.appendChild(b);
+  }
+}
+
+el.ctaStock.addEventListener('click', openStock);
+el.stockClose.addEventListener('click', closeStock);
+el.stockFind.addEventListener('input', renderStock);
+el.stockTabs.addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]');
+  if(!b) return;
+  stockTab = b.dataset.tab;
+  [...el.stockTabs.children].forEach(x => x.classList.toggle('is-on', x === b));
+  el.stockBody.scrollTop = 0;
+  renderStock();
+});
 
 /* ── particle design ─────────────────────────────────────── */
 
@@ -811,17 +962,20 @@ window.addEventListener('keydown', e => {
   if(!field) return;
   const k = e.key;
   if(k === 'Escape'){
-    if(openMenuEl) closeMenu();
+    if(!el.stock.hidden) closeStock();
+    else if(openMenuEl) closeMenu();
     else if(!el.help.hidden) el.help.hidden = true;
     else if(!gateOpen && document.fullscreenElement) document.exitFullscreen?.();
     return;
   }
+  if(!el.stock.hidden && k !== 'Escape') return;   // the shelf owns the keyboard
   if(gateOpen && k !== '?') return;
 
   switch(k){
     case ' ': e.preventDefault(); audio.toggle(); setTimeout(syncTransport, 30); break;
     case 'f': case 'F': toggleFullscreen(); break;
     case 'p': case 'P': applyPalette(field.paletteIndex + 1, true); break;
+    case 'c': case 'C': openCollections(musicOnly ? el.npCollections : el.btnCollections); break;
     case 'm': case 'M': applyMode(field.modeB + 1, true); break;
     case 'n': case 'N':
       if(audio.kind === 'ambient') applyScene(nextScene(), true);

@@ -1011,3 +1011,129 @@ body.is-music .vignette,
 body.is-music .topbar,
 body.is-music .dock,
 body.is-music .solar{ display:none !important; }
+
+.np__coll{
+  display:inline-flex; align-items:center; gap:9px; height:38px; padding:0 18px;
+  margin-bottom:22px; border-radius:11px;
+  font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-2); border:1px solid var(--hair); background:rgba(255,255,255,.045);
+  -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  transition:background .25s, color .25s, transform .35s var(--ease);
+}
+.np__coll svg{ width:15px; height:15px; }
+.np__coll:hover{ background:rgba(255,255,255,.10); color:#fff; transform:translateY(-2px); }
+.np__coll:active{ transform:translateY(0) scale(.97); }
+
+/* ═══════════════════════════════════════════════════════════
+   Stock browser
+   ═══════════════════════════════════════════════════════════ */
+
+.stock{
+  position:fixed; inset:0; z-index:42; display:flex; flex-direction:column;
+  background:rgba(7,8,11,.965);
+  -webkit-backdrop-filter:blur(44px) saturate(150%); backdrop-filter:blur(44px) saturate(150%);
+  animation:fade .38s var(--ease);
+  padding:calc(var(--safe-t) + 22px) 0 0;
+}
+.stock__top{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  padding:0 var(--gutter) 16px; flex:none;
+}
+.stock__eyebrow{
+  margin:0 0 5px; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--ink-4);
+}
+.stock__title{ margin:0; font-size:clamp(26px,4vw,34px); font-weight:270; letter-spacing:-.028em; }
+.stock__close{
+  width:38px; height:38px; border-radius:12px; padding:9px; flex:none;
+  color:var(--ink-3); border:1px solid var(--hair); background:rgba(255,255,255,.035);
+  transition:background .22s, color .22s;
+}
+.stock__close:hover{ background:rgba(255,255,255,.10); color:#fff; }
+
+.stock__bar{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:0 var(--gutter) 16px; flex:none;
+}
+.seg{
+  display:flex; gap:2px; padding:3px; border-radius:12px;
+  background:rgba(255,255,255,.05); border:1px solid var(--hair-soft);
+}
+.seg__b{
+  height:32px; padding:0 15px; border-radius:9px; font-size:12.5px;
+  color:var(--ink-3); transition:background .22s, color .22s;
+}
+.seg__b:hover{ color:var(--ink); }
+.seg__b.is-on{ background:rgba(255,255,255,.11); color:#fff; }
+
+.stock__find{
+  display:flex; align-items:center; gap:9px; flex:1 1 180px; min-width:150px;
+  height:38px; padding:0 13px; border-radius:11px;
+  border:1px solid var(--hair); background:rgba(255,255,255,.035); color:var(--ink-4);
+}
+.stock__find svg{ width:15px; height:15px; flex:none; }
+.stock__find input{
+  flex:1; min-width:0; background:none; border:0; outline:none;
+  color:var(--ink); font:inherit; font-size:13px;
+}
+.stock__find input::placeholder{ color:var(--ink-4); }
+.stock__find input::-webkit-search-cancel-button{ -webkit-appearance:none; }
+
+.stock__body{
+  flex:1; overflow-y:auto; overscroll-behavior:contain;
+  padding:0 var(--gutter) calc(var(--safe-b) + 28px);
+  scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.18) transparent;
+}
+.stock__body::-webkit-scrollbar{ width:9px; }
+.stock__body::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.16); border-radius:99px;
+  border:3px solid transparent; background-clip:content-box;
+}
+.stock__empty{
+  padding:6px var(--gutter) 28px; margin:0; font-size:13px; color:var(--ink-4);
+}
+
+.stock__group{
+  padding:18px 2px 9px; font-size:9.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-4);
+}
+.stock__grid{
+  display:grid; gap:9px;
+  grid-template-columns:repeat(auto-fill, minmax(228px, 1fr));
+}
+.stock__card{
+  display:flex; flex-direction:column; gap:5px; align-items:flex-start;
+  padding:15px 16px; border-radius:15px; text-align:left;
+  border:1px solid var(--hair-soft); background:rgba(255,255,255,.032);
+  transition:transform .4s var(--ease), background .24s, border-color .24s;
+}
+.stock__card:hover{
+  transform:translateY(-2px); background:rgba(255,255,255,.075);
+  border-color:rgba(255,255,255,.2);
+}
+.stock__card:active{ transform:translateY(0) scale(.99); transition-duration:.1s; }
+.stock__card b{ font-size:14.5px; font-weight:520; letter-spacing:-.008em; }
+.stock__card i{ font-style:normal; font-size:12px; line-height:1.5; color:var(--ink-4); }
+.stock__card.is-on{ background:rgba(110,155,255,.13); border-color:rgba(120,160,255,.32); }
+.stock__parts{
+  display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;
+}
+.stock__parts span{
+  font-size:10px; letter-spacing:.06em; padding:3px 7px; border-radius:6px;
+  color:var(--ink-3); background:rgba(255,255,255,.055);
+}
+/* Scoped to beat `.stock__parts span`, which is one specificity point
+   higher than a lone class and was winning on padding — which stretched
+   the dot into an oval. */
+.stock__parts .stock__sw{
+  width:9px; height:9px; flex:none; padding:0; border-radius:50%;
+  align-self:center; margin-right:3px; background-clip:padding-box;
+  box-shadow:0 0 0 1px rgba(255,255,255,.2) inset;
+}
+
+@media (max-width: 620px){
+  .stock__grid{ grid-template-columns:1fr; }
+  .stock__bar{ gap:10px; }
+  .seg{ width:100%; }
+  .seg__b{ flex:1; padding:0 8px; }
+}
