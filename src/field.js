@@ -20,11 +20,145 @@ export const PALETTES = [
 /* ── particle designs ─────────────────────────────────────────
    Each mode reinterprets the same buffers as a different form,
    so switching is a cross-fade rather than a rebuild.         */
+/* ── particle designs ─────────────────────────────────────────
+   Fifty designs over eight families. `fam` picks the shader
+   function; p0/p1 are its eight parameters. Writing fifty shader
+   functions instead would be fifty near-duplicates and a compile
+   time no phone would forgive, so the variety lives in data.
+
+   fam 0 SHELL      p0 [fold, crumple freq, thickness, radius]
+   fam 1 CORONA     p0 [swirl, height, base radius, spread]
+   fam 2 CHLADNI    p0 [n1, m1, n2, m2]            p1 [scale]
+   fam 3 KNOT       p0 [p, q (<0 = helix), tube, turns]
+                    p1 [gain, 2 strands, spin, rungs]
+   fam 4 ROSE       p0 [petals, rings, lift, petalled]  p1 [spread]
+   fam 5 CURTAIN    p0 [sheets, sway, falling, width]
+   fam 6 LISSAJOUS  p0 [a, b, c, phase]            p1 [tube]
+   fam 7 SUPERSHAPE p0 [m, n1, n2, n3]             p1 [scale, m2]     */
+
+const D = (id, name, group, blurb, fam, p0, p1, extent, pitch, plane, mirror) =>
+  ({ id, name, group, blurb, fam, p0, p1, extent, pitch, plane, mirror });
+
 export const MODES = [
-  { id:'orb',     name:'Orb',     extent:2.55, pitch:0.235, plane:1.00, mirror:1.00 },
-  { id:'corona',  name:'Corona',  extent:3.15, pitch:0.200, plane:1.00, mirror:0.50 },
-  { id:'cymatic', name:'Cymatic', extent:3.55, pitch:0.455, plane:0.12, mirror:0.00 },
-  { id:'helix',   name:'Helix',   extent:2.95, pitch:0.175, plane:0.45, mirror:0.55 }
+  /* ── Reactive: the spectrum is legible in the shape ── */
+  D('orb','Orb','Reactive','A hollow shell, frequency around its equator',
+    0,[1,1.35,0.215,1],[1,1,0,0], 2.55,0.235,1.00,1.00),
+  D('corona','Corona','Reactive','A radial fountain — angle is pitch, height is level',
+    1,[0.55,3.3,1.25,0.55],[1,0,0,0], 3.15,0.200,1.00,0.50),
+  D('cymatic','Cymatic','Reactive','A Chladni plate; particles settle on the nodes',
+    2,[2,3,3,5],[2.55,0,0,0], 3.55,0.455,0.12,0.00),
+  D('helix','Helix','Reactive','Two strands carrying the live waveform',
+    3,[0,-1,0.050,2.15],[1.05,1,0,1], 2.95,0.175,0.45,0.55),
+  D('quartz','Quartz','Reactive','A hard-edged shell, spectrum folded twice',
+    0,[2,2.6,0.14,0.95],[0.6,0.5,0,0], 2.45,0.220,0.80,0.80),
+  D('nebula','Nebula','Reactive','A soft wide shell, barely holding its shape',
+    0,[1,0.8,0.42,1.25],[1.7,1.8,0,0], 3.10,0.240,0.85,0.75),
+  D('pulsar','Pulsar','Reactive','A tight core with the spectrum ringed around it',
+    0,[4,1.9,0.10,0.80],[0.8,0.6,0,0], 2.10,0.260,0.90,0.85),
+  D('geyser','Geyser','Reactive','A narrow jet, driven hard by the low end',
+    1,[0.18,4.6,0.80,0.30],[1,0,0,0], 3.40,0.140,1.00,0.45),
+  D('cyclone','Cyclone','Reactive','A wide vortex, heavily swirled',
+    1,[1.7,2.4,1.55,0.95],[1,0,0,0], 3.45,0.260,1.00,0.50),
+  D('crown','Crown','Reactive','A shallow ring of jets',
+    1,[0.30,1.9,1.70,0.35],[2,0,0,0], 3.20,0.300,1.00,0.55),
+
+  /* ── Plates: standing waves on a vibrating surface ── */
+  D('plate-i','Chladni I','Plates','The simplest figure — four quadrants',
+    2,[1,2,2,3],[2.4,0,0,0], 3.30,0.470,0.12,0.00),
+  D('plate-ii','Chladni II','Plates','Six-fold, with a star at the centre',
+    2,[3,4,4,6],[2.6,0,0,0], 3.50,0.460,0.12,0.00),
+  D('plate-iii','Chladni III','Plates','Dense lattice, high harmonics',
+    2,[5,7,6,9],[2.8,0,0,0], 3.70,0.450,0.10,0.00),
+  D('plate-iv','Chladni IV','Plates','Broad lobes, low and slow',
+    2,[1,3,2,5],[2.9,0,0,0], 3.60,0.500,0.12,0.00),
+  D('plate-v','Chladni V','Plates','Fine nodal web',
+    2,[7,9,8,11],[3.0,0,0,0], 3.85,0.440,0.10,0.00),
+
+  /* ── Knots: one curve wound through space ── */
+  D('torus','Torus','Knots','A smoke ring circulating through itself',
+    3,[1,0,0.40,1],[1.05,0,1,0], 2.45,0.300,0.70,0.55),
+  D('trefoil','Trefoil','Knots','The simplest true knot, three crossings',
+    3,[2,3,0.14,1],[1.10,0,1,0], 2.55,0.260,0.55,0.45),
+  D('knot-32','Knot 3·2','Knots','Three lobes wound twice',
+    3,[3,2,0.13,1],[1.10,0,1,0], 2.60,0.270,0.55,0.45),
+  D('knot-34','Knot 3·4','Knots','A tighter weave',
+    3,[3,4,0.11,1],[1.12,0,1,0], 2.60,0.280,0.50,0.40),
+  D('knot-54','Knot 5·4','Knots','Five lobes, densely crossed',
+    3,[5,4,0.10,1],[1.15,0,1,0], 2.65,0.290,0.50,0.40),
+  D('knot-72','Knot 7·2','Knots','A rosette of seven',
+    3,[7,2,0.09,1],[1.18,0,1,0], 2.70,0.300,0.48,0.38),
+  D('knot-53','Knot 5·3','Knots','Interlocking fives and threes',
+    3,[5,3,0.10,1],[1.15,0,1,0], 2.65,0.285,0.50,0.40),
+  D('coil','Coil','Knots','A long open spring',
+    3,[0,-1,0.055,4.2],[1.05,0,0,0], 3.05,0.150,0.45,0.50),
+  D('ribbon','Ribbon','Knots','A single wide strand, slowly turning',
+    3,[0,-1,0.14,1.4],[0.95,0,1,0], 2.85,0.190,0.50,0.55),
+  D('braid','Braid','Knots','Two strands with rungs between them',
+    3,[0,-1,0.045,3.1],[1.05,1,0,1], 3.00,0.180,0.45,0.55),
+
+  /* ── Rosettes: radial symmetry, the calmest geometry ── */
+  D('mandala','Mandala','Rosettes','Concentric rose curves, radially symmetric',
+    4,[6,6,1,0],[1.85,0,0,0], 2.95,0.560,0.30,0.15),
+  D('mandala-xii','Mandala XII','Rosettes','Twelve-fold, tightly nested',
+    4,[12,7,0.7,0],[1.70,0,0,0], 2.90,0.580,0.28,0.15),
+  D('mandala-v','Mandala V','Rosettes','Five-fold, wide and open',
+    4,[5,5,1.4,0],[2.10,0,0,0], 3.05,0.540,0.32,0.18),
+  D('rosette','Rosette','Rosettes','Few petals, deeply cut',
+    4,[3,4,1.8,0],[2.30,0,0,0], 3.10,0.520,0.34,0.20),
+  D('halo','Halo','Rosettes','A single broad ring, barely rippled',
+    4,[16,2,0.35,0],[2.40,0,0,0], 3.00,0.600,0.26,0.12),
+  D('lotus','Lotus','Rosettes','Rings of petals that open with the music',
+    4,[8,5,1,1],[1,0,0,0], 2.30,0.380,0.50,0.35),
+  D('lotus-wide','Water Lily','Rosettes','Broad petals, lying almost flat',
+    4,[10,4,0.55,1],[1.35,0,0,0], 2.60,0.470,0.50,0.35),
+  D('bloom','Bloom','Rosettes','Tall petals reaching upward',
+    4,[6,6,1.7,1],[0.90,0,0,0], 2.45,0.300,0.50,0.40),
+  D('anemone','Anemone','Rosettes','Many fine petals, restless',
+    4,[16,4,1.1,1],[1.05,0,0,0], 2.50,0.360,0.48,0.35),
+
+  /* ── Curtains: sheets of light ── */
+  D('aurora','Aurora','Curtains','Sheets of light swaying on a slow wind',
+    5,[4,0.55,0,3.3],[0,0,0,0], 3.70,0.090,0.55,0.40),
+  D('aurora-deep','Deep Aurora','Curtains','Six sheets, drifting far apart',
+    5,[6,0.85,0,4.2],[0,0,0,0], 4.20,0.080,0.50,0.35),
+  D('aurora-still','Still Aurora','Curtains','Two sheets, almost motionless',
+    5,[2,0.22,0,2.8],[0,0,0,0], 3.30,0.100,0.55,0.45),
+  D('veil','Veil','Curtains','Slow light-rain falling through the frame',
+    5,[1,0,1,4.3],[0,0,0,0], 3.40,0.120,0.60,0.30),
+  D('drizzle','Drizzle','Curtains','Fine rain over a wider field',
+    5,[1,0,1,5.6],[0,0,0,0], 4.00,0.110,0.60,0.28),
+  D('downpour','Downpour','Curtains','Heavy and close',
+    5,[1,0,1,3.0],[0,0,0,0], 2.90,0.130,0.65,0.32),
+
+  /* ── Figures: Lissajous curves, woven from three ratios ── */
+  D('lissa-23','Figure 2·3','Figures','Two against three — the classic figure',
+    6,[2,3,1,0],[0.09,0,0,0], 2.60,0.240,0.55,0.50),
+  D('lissa-34','Figure 3·4','Figures','A tighter weave',
+    6,[3,4,2,1.1],[0.08,0,0,0], 2.60,0.250,0.55,0.50),
+  D('lissa-35','Figure 3·5','Figures','Five against three, wide open',
+    6,[3,5,2,0.6],[0.08,0,0,0], 2.65,0.255,0.52,0.48),
+  D('lissa-45','Figure 4·5','Figures','Dense and symmetric',
+    6,[4,5,3,1.6],[0.07,0,0,0], 2.65,0.260,0.52,0.48),
+  D('lissa-57','Figure 5·7','Figures','Nearly a solid weave',
+    6,[5,7,3,0.4],[0.06,0,0,0], 2.70,0.265,0.50,0.45),
+  D('lissa-11','Figure 1·1','Figures','A single slow loop',
+    6,[1,1,2,1.57],[0.13,0,0,0], 2.45,0.230,0.58,0.55),
+
+  /* ── Supershapes: four numbers, a great many forms ── */
+  D('star','Star','Supershapes','A six-pointed shell',
+    7,[6,0.3,0.3,0.3],[1.55,6,0,0], 2.75,0.230,0.80,0.70),
+  D('bulb','Bulb','Supershapes','Smooth and nearly round',
+    7,[4,1.0,1.0,1.0],[1.70,4,0,0], 2.60,0.240,0.85,0.80),
+  D('cog','Cog','Supershapes','Twelve flat facets',
+    7,[12,0.5,0.5,0.5],[1.50,12,0,0], 2.70,0.235,0.80,0.75),
+  D('shell','Conch','Supershapes','Soft lobes, gently asymmetric',
+    7,[5,0.6,1.4,0.9],[1.60,3,0,0], 2.75,0.245,0.82,0.75),
+  D('seed','Seed','Supershapes','Three lobes, tightly drawn',
+    7,[3,0.4,0.9,0.9],[1.65,3,0,0], 2.65,0.240,0.84,0.78),
+  D('diatom','Diatom','Supershapes','Eight-fold, like a radiolarian',
+    7,[8,0.8,1.8,1.8],[1.58,8,0,0], 2.70,0.250,0.80,0.72),
+  D('crystal','Crystal','Supershapes','Sharp and faceted',
+    7,[7,0.2,1.7,1.7],[1.52,5,0,0], 2.72,0.245,0.78,0.70)
 ];
 
 /* The clock is wrapped here. Every animated term is driven through a
@@ -508,8 +642,11 @@ export class Field {
     gl.uniform1f(u.uRadius, this.radius);
     gl.uniform1f(u.uSpecAmp, this.specAmp);
     gl.uniform1i(u.uOctaves, this.octaves);
-    gl.uniform1i(u.uModeA, this.modeA);
-    gl.uniform1i(u.uModeB, this.modeB);
+    const A = MODES[this.modeA], B = MODES[this.modeB];
+    gl.uniform1i(u.uFamA, A.fam);
+    gl.uniform1i(u.uFamB, B.fam);
+    gl.uniform4fv(u.uPA0, A.p0); gl.uniform4fv(u.uPA1, A.p1);
+    gl.uniform4fv(u.uPB0, B.p0); gl.uniform4fv(u.uPB1, B.p1);
     gl.uniform1f(u.uMorph, this.morph);
     gl.uniform1f(u.uIntensity, this.intensity * this.profile.lightScale);
     gl.uniform3fv(u.uPal, this.palLinear);

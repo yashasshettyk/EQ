@@ -34,8 +34,10 @@ uniform float uLoopW;      // TAU / loop period
 uniform float uRadius;
 uniform float uSpecAmp;
 uniform int   uOctaves;
-uniform int   uModeA;
-uniform int   uModeB;
+uniform int   uFamA;
+uniform int   uFamB;
+uniform vec4  uPA0, uPA1;  // design A's four-plus-four parameters
+uniform vec4  uPB0, uPB1;  // design B's, during a cross-fade
 uniform float uMorph;      // 0 = A, 1 = B
 
 /* ── seamless clock ───────────────────────────────────────────
@@ -237,55 +239,71 @@ float energyAt(float band, vec3 dir){
               + snoise(dir * 1.1 + pdrift(14.0, 11.0, 17.0) * 0.6) * 2.2)) * 0.46;
 }
 
-/* ── 0 · ORB — a hollow, crumpled shell. Azimuth is frequency. ── */
-Form formOrb(vec3 dir, vec4 seed){
+Form baseForm(){
   Form f;
+  f.pos = vec3(0.0); f.nrm = vec3(0.0, 1.0, 0.0);
+  f.energy = 0.0; f.size = 1.0; f.tone = 0.0;
+  f.gain = 1.0; f.rim = 1.0; f.tng = vec3(0.0, 1.0, 0.0); f.aniso = 0.0;
+  return f;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FAMILIES
+
+   Fifty separate shader functions would be fifty near-duplicates
+   and a compile time no phone would forgive. These eight are
+   parameterised instead: every design is a family plus four
+   numbers, so the variety lives in data and the shader stays
+   small enough to link quickly.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 0 · SHELL — a hollow crumpled sphere.
+      p = [fold, crumple frequency, thickness, radius]        ── */
+Form fShell(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
   float band = bandOf(dir, seed);
-  float a    = energyAt(band, dir);
+  band = fract(band * p.x);                       // fold: repeats the spectrum
+  float a  = energyAt(band, dir);
+  float pk = peak(band);
 
   vec3 tOff = pdrift(9.0, 7.0, 11.0) * 1.15;
-  float n1 = snoise(dir * 1.35 + tOff);
-  float n2 = (uOctaves > 1) ? snoise(dir * 3.4 - tOff * 1.4) : 0.0;
-  float n3 = (uOctaves > 2) ? snoise(dir * 7.6 + tOff * 2.1) : 0.0;
-  float crumple = n1 * 0.105 + n2 * 0.038 + n3 * 0.013;
+  float n1 = snoise(dir * p.y + tOff);
+  float n2 = (uOctaves > 1) ? snoise(dir * p.y * 2.5 - tOff * 1.4) : 0.0;
+  float n3 = (uOctaves > 2) ? snoise(dir * p.y * 5.6 + tOff * 2.1) : 0.0;
+  float crumple = (n1 * 0.105 + n2 * 0.038 + n3 * 0.013) * q.x;
 
   float lat = 1.0 - pow(abs(dir.y), 2.6) * 0.45;
+  float sh  = seed.x * 2.0 - 1.0;
+  float thick = sign(sh) * pow(abs(sh), 2.4) * p.z;
 
-  float sh    = seed.x * 2.0 - 1.0;
-  float thick = sign(sh) * pow(abs(sh), 2.4) * 0.215;
-
-  float r = uRadius * (1.0 + crumple) + thick
+  float r = uRadius * p.w * (1.0 + crumple) + thick
           + a * uSpecAmp * lat * (0.60 + 0.55 * n1)
           + uBass * 0.19 + uBeat * 0.055;
-
   r += rippleRadial(r, 2.35, 5.0, 7.0, 2.6) * 0.16;
 
   vec3 pos = dir * r;
   pos += curl(dir * 1.25 + pdrift(13.0, 9.0, 15.0) * 0.5, 0.38)
-       * (0.030 + a * 0.085 + uLevel * 0.030);
+       * (0.030 + a * 0.085 + uLevel * 0.030) * q.y;
   pos += dir * sin(pphase(80.0 + floor(seed.y * 60.0))) * (0.008 + a * 0.020);
 
   f.pos = pos; f.nrm = dir;
-  f.energy = a * 0.75 + peak(band) * 0.25;
+  f.energy = a * 0.75 + pk * 0.25;
   f.size = 0.8 + seed.y * 1.4;
-  f.tone = 0.0; f.gain = 1.0; f.rim = 1.0; f.tng = dir; f.aniso = 0.0;
   return f;
 }
 
-/* ── 1 · CORONA — a radial fountain. The literal equalizer:
-       angle is frequency, height is amplitude.              ── */
-Form formCorona(vec3 dir, vec4 seed){
-  Form f;
-  float az   = atan(dir.z, dir.x);
-  float band = bandOf(dir, seed);
-  float a    = energyAt(band, dir);
+/* ── 1 · CORONA — a radial fountain.
+      p = [swirl, height, base radius, spread]                ── */
+Form fCorona(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  float az = atan(dir.z, dir.x);
+  float band = fract(bandOf(dir, seed) * q.x);
+  float a = energyAt(band, dir);
 
-  float u  = pow(seed.x, 1.7);                  // dense at the base
-  // One continuous twist for the whole ring. Mirroring the swirl around
-  // az = 0 would tear a seam down the front of the fountain.
-  float th = az + u * 0.55 + pphase(6.0);
-  float r  = 1.25 + u * 0.55 + a * 0.95 + uBass * 0.10;
-  float y  = -1.72 + pow(u, 1.35) * (0.50 + a * 3.3 + uLevel * 0.5);
+  float u  = pow(seed.x, 1.7);
+  float th = az + u * p.x + pphase(6.0);
+  float r  = p.z + u * p.w + a * 0.95 + uBass * 0.10;
+  float y  = -1.72 + pow(u, 1.35) * (0.50 + a * p.y + uLevel * 0.5);
 
   vec3 pos = vec3(cos(th) * r, y, sin(th) * r);
   pos += curl(pos * 0.6 + pdrift(11.0, 13.0, 7.0) * 0.6, 0.4)
@@ -296,30 +314,31 @@ Form formCorona(vec3 dir, vec4 seed){
   f.nrm = normalize(vec3(cos(th), 0.35, sin(th)));
   f.energy = (a * 0.85 + peak(band) * 0.25) * (1.0 - u * 0.35);
   f.size = 0.7 + seed.y * 1.2 + (1.0 - u) * 0.6;
-  f.tone = u * 0.18; f.gain = 0.92; f.rim = 0.50; f.tng = f.nrm; f.aniso = 0.0;
+  f.tone = u * 0.18; f.gain = 0.92; f.rim = 0.50;
   return f;
 }
 
-/* ── 2 · CYMATIC — a Chladni plate. Particles relax onto the
-       nodal lines of a standing wave, which is very nearly
-       what sand does on a vibrating sheet.                  ── */
-float chladni(vec2 p, float n, float m){
-  return cos(n * PI * p.x) * cos(m * PI * p.y)
-       - cos(m * PI * p.x) * cos(n * PI * p.y);
+/* ── 2 · CHLADNI — a vibrating plate. Particles relax onto the
+      nodal lines, which is very nearly what sand does.
+      p = [n1, m1, n2, m2]                                    ── */
+float chladni(vec2 pt, float n, float m){
+  return cos(n * PI * pt.x) * cos(m * PI * pt.y)
+       - cos(m * PI * pt.x) * cos(n * PI * pt.y);
 }
-float plateH(vec2 p){
+vec4 gPlate;
+float plateH(vec2 pt){
   float lo = spec(0.07) + uIdle * 0.22, ml = spec(0.20) + uIdle * 0.15;
   float mh = spec(0.40) + uIdle * 0.10, hi = spec(0.64) + uIdle * 0.06;
-  return chladni(p, 2.0, 3.0)  * (0.30 + lo * 1.5)
-       + chladni(p, 3.0, 5.0)  * (0.20 + ml * 1.3)
-       + chladni(p, 5.0, 8.0)  * (0.14 + mh * 1.1)
-       + chladni(p, 8.0, 13.0) * (0.09 + hi * 0.9);
+  return chladni(pt, gPlate.x, gPlate.y) * (0.30 + lo * 1.5)
+       + chladni(pt, gPlate.z, gPlate.w) * (0.20 + ml * 1.3)
+       + chladni(pt, gPlate.x + 2.0, gPlate.w + 3.0) * (0.14 + mh * 1.1)
+       + chladni(pt, gPlate.z + 3.0, gPlate.y + 5.0) * (0.09 + hi * 0.9);
 }
-Form formCymatic(vec3 dir, vec4 seed){
-  Form f;
-  vec2 p = vec2(seed.x, seed.y) * 2.0 - 1.0;
+Form fChladni(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  gPlate = p;
+  vec2 pt = vec2(seed.x, seed.y) * 2.0 - 1.0;
 
-  // Newton steps toward the zero set — this is what draws the figure.
   const float e = 0.012;
   #ifdef CHEAP
   const int STEPS = 1;
@@ -327,98 +346,298 @@ Form formCymatic(vec3 dir, vec4 seed){
   const int STEPS = 2;
   #endif
   for(int i = 0; i < STEPS; i++){
-    float h  = plateH(p);
-    vec2  g  = vec2(plateH(p + vec2(e,0.0)) - h, plateH(p + vec2(0.0,e)) - h) / e;
-    p -= g * h / (dot(g, g) + 0.45) * 0.72;
+    float h = plateH(pt);
+    vec2  g = vec2(plateH(pt + vec2(e,0.0)) - h, plateH(pt + vec2(0.0,e)) - h) / e;
+    pt -= g * h / (dot(g, g) + 0.45) * 0.72;
   }
-  p = clamp(p, -1.0, 1.0);
+  pt = clamp(pt, -1.0, 1.0);
 
-  float h = plateH(p);
+  float h = plateH(pt);
   float rot = pphase(4.0);
-  vec2 q = vec2(p.x * cos(rot) - p.y * sin(rot), p.x * sin(rot) + p.y * cos(rot)) * 2.55;
+  vec2 qq = vec2(pt.x * cos(rot) - pt.y * sin(rot),
+                 pt.x * sin(rot) + pt.y * cos(rot)) * q.x;
 
-  vec3 pos = vec3(q.x, -0.02 + h * 0.34 + uBass * 0.24, q.y);
-  pos.y += rippleField(q, 2.85, 3.4, 6.0, 3.3) * 0.55;
+  vec3 pos = vec3(qq.x, -0.02 + h * 0.34 + uBass * 0.24, qq.y);
+  pos.y += rippleField(qq, 2.85, 3.4, 6.0, 3.3) * 0.55;
   pos += curl(pos * 0.5 + pdrift(7.0, 5.0, 9.0) * 0.4, 0.45) * 0.035;
 
-  float node = 1.0 - clamp(abs(h) * 1.6, 0.0, 1.0);   // bright on the lines
+  float node = 1.0 - clamp(abs(h) * 1.6, 0.0, 1.0);
   f.pos = pos;
-  f.nrm = normalize(vec3(q.x * 0.30, 1.0, q.y * 0.30));
+  f.nrm = normalize(vec3(qq.x * 0.30, 1.0, qq.y * 0.30));
   f.energy = node * (0.34 + uLevel * 0.85 + uBass * 0.40) + spec(0.3) * 0.16;
   f.size = 0.5 + seed.z * 0.7 + node * 0.8;
-  f.tone = 0.04;
-  // Tens of thousands of points collapse onto a few thin curves here, so
-  // the additive load per pixel is enormous. Pull the exposure right down.
-  f.gain = 0.42; f.rim = 0.20; f.tng = f.nrm; f.aniso = 0.0;
+  f.tone = 0.04; f.gain = 0.42; f.rim = 0.20;
   return f;
 }
 
-/* ── 3 · HELIX — two strands carrying the live waveform. ── */
-Form formHelix(vec3 dir, vec4 seed){
-  Form f;
-  float t      = seed.x;
-  float strand = step(0.5, seed.w);
-  float w      = wave(t);
-  float a      = spec(t) + uIdle * 0.12;
+/* ── 3 · KNOT — one curve wound through space. q = 0 gives an
+      open helix, anything else a torus knot: (2,3) is a
+      trefoil, (3,2) a different one, and so on for dozens.
+      p = [p winding, q winding, tube radius, turns]          ── */
+Form fKnot(vec3 dir, vec4 seed, vec4 pr, vec4 q){
+  Form f = baseForm();
+  float t = seed.x;
+  float a = spec(t) + uIdle * 0.12;
+  float w = wave(t);
+  float strand = step(0.5, seed.w) * q.y;          // optional second strand
 
-  float TURNS = 2.15;
-  float base  = t * TAU * TURNS + pphase(12.0);
-  float ang   = base + strand * PI;
-  float rad   = 1.32 + w * 0.40 + a * 0.52;
-  float y     = (t - 0.5) * 3.0 + w * 0.16;
+  vec3 c, tang;
+  float spin = pphase(12.0);
 
-  float ct = seed.y * TAU, cr = pow(seed.z, 0.6) * (0.050 + a * 0.15);
-  vec3 radial = vec3(cos(ang), 0.0, sin(ang));
-  vec3 pos = radial * rad + vec3(0.0, y, 0.0)
-           + radial * cos(ct) * cr + vec3(0.0, sin(ct) * cr, 0.0);
+  if(pr.y < -0.5){
+    // open helix
+    float ang = t * TAU * pr.w + strand * PI + spin;
+    float rad = 1.20 + w * 0.40 + a * 0.52;
+    c = vec3(cos(ang) * rad, (t - 0.5) * 3.0 + w * 0.16, sin(ang) * rad);
+    tang = normalize(vec3(-sin(ang), 3.0 / (TAU * pr.w), cos(ang)));
+  } else {
+    // torus knot
+    float u = t * TAU * pr.w + spin;
+    float cq = cos(pr.y * u), sq = sin(pr.y * u);
+    float R  = 1.05 + a * 0.30;
+    c = vec3((2.0 + cq) * cos(pr.x * u), sq * 1.15, (2.0 + cq) * sin(pr.x * u)) * R * 0.52;
+    float d = 0.01;
+    float u2 = u + d;
+    vec3 c2 = vec3((2.0 + cos(pr.y*u2)) * cos(pr.x*u2), sin(pr.y*u2) * 1.15,
+                   (2.0 + cos(pr.y*u2)) * sin(pr.x*u2)) * R * 0.52;
+    tang = normalize(c2 - c + 1e-5);
+  }
 
-  // A share of the points bridge the two strands, which is what makes the
-  // pair read as one structure rather than two unrelated springs.
-  if(seed.w > 0.80){
-    float tt  = floor(t * 30.0) / 30.0;
-    float ba  = tt * TAU * TURNS + pphase(12.0);
-    float yy  = (tt - 0.5) * 3.0;
-    float rr  = 1.32 + wave(tt) * 0.40 + spec(tt) * 0.52;
-    vec3  ra  = vec3(cos(ba), 0.0, sin(ba));
-    float k   = fract(seed.z * 7.13);
-    pos = mix(ra * rr, -ra * rr, k) + vec3(0.0, yy, 0.0)
-        + vec3(0.0, (seed.y - 0.5) * 0.045, 0.0);
+  /* Cross-section frame. Picking an up-vector and crossing with it flips
+     wherever the tangent passes vertical, and the tube visibly twists and
+     clumps at the flip. Anchoring the frame to the axis instead — one
+     Gram-Schmidt step against the radial direction — keeps it stable all
+     the way round. */
+  vec3 radial = normalize(vec3(c.x, 0.0, c.z) + vec3(1e-4, 0.0, 1e-4));
+  vec3 n1 = normalize(radial - tang * dot(radial, tang) + 1e-5);
+  vec3 n2 = cross(tang, n1);
+
+  float ct = seed.y * TAU + q.z * pphase(9.0);   // q.z spins the tube
+  float cr = pow(seed.z, 0.6) * (pr.z + a * 0.15);
+  vec3 pos = c + (n1 * cos(ct) + n2 * sin(ct)) * cr;
+
+  // A share of the points bridge the two strands, so a pair reads as one
+  // structure rather than two unrelated springs.
+  if(q.w > 0.5 && seed.w > 0.80){
+    float ang2 = t * TAU * pr.w + spin;
+    float rr = 1.20 + wave(t) * 0.40 + spec(t) * 0.52;
+    vec3 ra = vec3(cos(ang2), 0.0, sin(ang2));
+    pos = mix(ra * rr, -ra * rr, fract(seed.z * 7.13))
+        + vec3(0.0, (t - 0.5) * 3.0 + (seed.y - 0.5) * 0.045, 0.0);
     a *= 0.7;
   }
 
   pos += curl(pos * 0.7 + pdrift(9.0, 15.0, 11.0) * 0.5, 0.42) * (0.02 + a * 0.10);
 
-  // Taper the ends: without this the strand tips pile up into hot blobs.
-  float endFade = smoothstep(0.0, 0.07, t) * (1.0 - smoothstep(0.93, 1.0, t));
+  float endFade = pr.y < -0.5
+    ? smoothstep(0.0, 0.07, t) * (1.0 - smoothstep(0.93, 1.0, t))
+    : 1.0;
 
-  f.pos = pos;
-  f.nrm = radial;
-  // Tangent to the strand. Where this points at the eye, a long stretch of
-  // curve lands on very few pixels and piles up into a hot blob; the shader
-  // divides that back out.
-  f.tng = normalize(vec3(-sin(ang), 3.0 / (TAU * TURNS), cos(ang)));
-  f.aniso = 1.0;
+  f.pos = pos; f.nrm = n1;
+  f.tng = tang; f.aniso = 1.0;
   f.energy = (abs(w) * 1.00 + a * 0.85) * endFade;
   f.size = (0.70 + seed.y * 1.0 + abs(w) * 1.2) * (0.45 + endFade * 0.55);
   f.tone = 0.02 + abs(w) * 0.24;
-  f.gain = 1.05 * endFade; f.rim = 0.14;
+  f.gain = q.x * endFade; f.rim = 0.14;
   return f;
 }
 
-Form formOf(int mode, vec3 dir, vec4 seed){
-  if(mode == 1) return formCorona(dir, seed);
-  if(mode == 2) return formCymatic(dir, seed);
-  if(mode == 3) return formHelix(dir, seed);
-  return formOrb(dir, seed);
+/* ── 4 · ROSE — concentric rose curves, or petals that open.
+      p = [petals, rings, lift, mode 0=flat 1=petalled]       ── */
+Form fRose(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  float rings = p.y;
+  float ringI = floor(seed.x * rings);
+  float ring  = ringI / max(1.0, rings - 1.0);
+  float a     = energyAt(ring, dir);
+
+  if(p.w < 0.5){
+    // flat mandala
+    float petals = p.x + ringI * 2.0;
+    float th = seed.y * TAU + pphase(3.0) * (1.0 + ringI * 0.10);
+    float rose = 0.5 + 0.5 * cos(petals * th);
+    float r = 0.45 + ring * q.x + rose * (0.18 + a * 0.85);
+    float y = (rose - 0.5) * (0.10 + a * 0.45) * p.z + (seed.z - 0.5) * 0.05;
+
+    vec3 pos = vec3(cos(th) * r, y, sin(th) * r);
+    pos.y += rippleField(pos.xz, 2.85, 3.4, 6.0, 3.3) * 0.30;
+    f.pos = pos;
+    f.nrm = normalize(vec3(cos(th) * 0.3, 1.0, sin(th) * 0.3));
+    f.energy = a * (0.45 + rose * 0.85);
+    f.size = 0.5 + seed.z * 0.75 + rose * 0.9;
+    f.tone = 0.03 + ring * 0.22;
+    f.gain = 0.60; f.rim = 0.18;
+  } else {
+    // petals that open
+    float petals = p.x + ringI * 4.0;
+    float th    = seed.y * TAU + ringI * 0.35 + pphase(2.0);
+    float idx   = floor(th / TAU * petals);
+    float local = fract(th / TAU * petals) * 2.0 - 1.0;
+
+    float open  = 0.35 + a * 0.95 + uLevel * 0.30;
+    float along = pow(seed.z, 0.7);
+    float width = (1.0 - local * local) * (1.0 - along * 0.72);
+
+    float baseA = (idx + 0.5) / petals * TAU;
+    float curve = sin(along * PI * 0.86);
+    float r     = (0.30 + ring * 0.45) + curve * (0.62 + ring * 0.62) * q.x;
+    float lift  = (1.0 - cos(along * PI * 0.80)) * open * (0.85 - ring * 0.34) * p.z;
+
+    vec3 tangent = vec3(-sin(baseA), 0.0, cos(baseA));
+    vec3 pos = vec3(cos(baseA) * r, lift - 0.45 + ring * 0.15, sin(baseA) * r)
+             + tangent * local * width * (0.16 + ring * 0.20);
+
+    f.pos = pos;
+    f.nrm = normalize(vec3(cos(baseA) * 0.6, 0.8, sin(baseA) * 0.6));
+    f.energy = a * (0.35 + width);
+    f.size = 0.48 + seed.w * 0.75 + width * 0.95;
+    f.tone = 0.05 + ring * 0.26;
+    f.tng = normalize(vec3(cos(baseA), 0.55, sin(baseA)));
+    f.aniso = 0.85; f.gain = 0.92; f.rim = 0.14;
+  }
+  return f;
+}
+
+/* ── 5 · CURTAIN — sheets of light, swaying or falling.
+      p = [sheets, sway, fall 0..1, width]                    ── */
+Form fCurtain(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  float sheet = floor(seed.w * p.x);
+  float u     = seed.x * 2.0 - 1.0;
+  float band  = clamp(abs(u) * 0.92 + 0.04, 0.0, 1.0);
+  float a     = energyAt(band, dir);
+  float t     = pphase(7.0);
+
+  if(p.z < 0.5){
+    // aurora: standing sheets that sway
+    float sway = sin(u * 2.3 + t + sheet * 1.7) * p.y
+               + sin(u * 5.1 - t * 1.3 + sheet) * p.y * 0.36;
+    float h = pow(seed.y, 1.35);
+    float height = 1.5 + a * 2.7 + uLevel * 0.7;
+    f.pos = vec3(u * p.w + sin(h * 3.0 + t * 1.2 + sheet) * 0.30 * h,
+                 -1.6 + h * height,
+                 sway + (sheet - p.x * 0.5 + 0.5) * 0.85);
+    f.nrm = vec3(0.0, 0.0, 1.0);
+    f.energy = a * (1.0 - h * 0.5);
+    f.size = 0.55 + seed.z * 0.85;
+    f.tone = 0.04 + h * 0.34;
+    f.gain = 0.66; f.rim = 0.10;
+    f.tng = vec3(1.0, 0.0, 0.0);
+  } else {
+    // veil: rain. Lifetimes are quantised so the fall stays seamless
+    // across the clock wrap, exactly as the wisps are.
+    const float LIFE = 6.0;
+    float rate = 1.0 + floor(seed.w * 3.0) * 0.5;
+    float age  = mod(uTime * rate + seed.z * LIFE, LIFE);
+    float uu   = age / LIFE;
+
+    float x = u * p.w + sin(pphase(5.0) + seed.y * TAU) * 0.22;
+    float z = (seed.y * 2.0 - 1.0) * p.w * 0.72;
+    float y = mix(2.9, -2.5, uu) + a * 0.35 * sin(uu * PI);
+
+    float fade = smoothstep(0.0, 0.08, uu) * (1.0 - smoothstep(0.86, 1.0, uu));
+    float edge = exp(-x * x * 0.058) * exp(-z * z * 0.10);
+    float streak = 0.55 + (rate - 1.0) * 0.9;
+
+    f.pos = vec3(x, y, z);
+    f.nrm = vec3(0.0, 1.0, 0.0);
+    f.energy = a * fade * edge * (0.45 + 0.55 * sin(uu * PI));
+    f.size = (0.45 + seed.z * 0.8 + a * 1.0) * fade * streak;
+    f.tone = 0.06 + uu * 0.20;
+    f.gain = 1.15 * fade * edge; f.rim = 0.12;
+    f.tng = vec3(0.0, 1.0, 0.0);
+  }
+  return f;
+}
+
+/* ── 6 · LISSAJOUS — three sine ratios traced in space. Small
+      whole-number ratios give the classic woven figures.
+      p = [a, b, c, phase]                                    ── */
+Form fLissa(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  float t = seed.x * TAU;
+  float a = spec(seed.x) + uIdle * 0.12;
+  float w = wave(seed.x);
+  float ph = p.w + pphase(2.0);
+
+  vec3 c = vec3(sin(p.x * t + ph), sin(p.y * t), sin(p.z * t + ph * 0.5))
+         * (1.45 + a * 0.45 + uBass * 0.12);
+
+  float d = 0.008;
+  vec3 c2 = vec3(sin(p.x*(t+d) + ph), sin(p.y*(t+d)), sin(p.z*(t+d) + ph*0.5))
+          * (1.45 + a * 0.45 + uBass * 0.12);
+  vec3 tang = normalize(c2 - c + 1e-5);
+
+  float ct = seed.y * TAU, cr = pow(seed.z, 0.6) * (q.x + a * 0.12);
+  vec3 radial = normalize(vec3(c.x, 0.0, c.z) + vec3(1e-4, 0.0, 1e-4));
+  vec3 n1 = normalize(radial - tang * dot(radial, tang) + 1e-5);
+  vec3 n2 = cross(tang, n1);
+  vec3 pos = c + (n1 * cos(ct) + n2 * sin(ct)) * cr;
+
+  f.pos = pos; f.nrm = n1;
+  f.tng = tang; f.aniso = 1.0;
+  f.energy = abs(w) * 0.8 + a * 0.9;
+  f.size = 0.65 + seed.y * 0.9 + abs(w) * 1.1;
+  f.tone = 0.03 + abs(w) * 0.22;
+  f.gain = 1.05; f.rim = 0.14;
+  return f;
+}
+
+/* ── 7 · SUPERSHAPE — Gielis's superformula on a sphere. Four
+      numbers walk it from a star to a flower to a bulb; this
+      one family carries most of the organic designs.
+      p = [m, n1, n2, n3]                                     ── */
+float superR(float phi, vec4 p){
+  float t = p.x * phi * 0.25;
+  float a = pow(abs(cos(t)), p.z);
+  float b = pow(abs(sin(t)), p.w);
+  return pow(a + b, -1.0 / max(0.15, p.y));
+}
+Form fSuper(vec3 dir, vec4 seed, vec4 p, vec4 q){
+  Form f = baseForm();
+  float band = bandOf(dir, seed);
+  float amp  = energyAt(band, dir);
+
+  float theta = atan(dir.z, dir.x);
+  float phi   = asin(clamp(dir.y, -1.0, 1.0));
+
+  float r1 = superR(theta, p);
+  float r2 = superR(phi, vec4(q.y, p.y, p.z, p.w));
+
+  vec3 pos = vec3(r1 * cos(theta) * r2 * cos(phi),
+                  r2 * sin(phi),
+                  r1 * sin(theta) * r2 * cos(phi));
+  pos *= q.x * (1.0 + amp * 0.55 + uBass * 0.14);
+
+  float sh = seed.x * 2.0 - 1.0;
+  pos += normalize(pos + 1e-5) * sign(sh) * pow(abs(sh), 2.4) * 0.18;
+  pos += curl(pos * 0.9 + pdrift(13.0, 9.0, 15.0) * 0.5, 0.40) * (0.03 + amp * 0.08);
+
+  f.pos = pos;
+  f.nrm = normalize(pos + 1e-5);
+  f.energy = amp * 0.8 + peak(band) * 0.2;
+  f.size = 0.7 + seed.y * 1.2;
+  f.tone = 0.02;
+  f.gain = 0.85; f.rim = 0.75;
+  return f;
+}
+
+Form formOf(int fam, vec3 dir, vec4 seed, vec4 p, vec4 q){
+  if(fam == 1) return fCorona(dir, seed, p, q);
+  if(fam == 2) return fChladni(dir, seed, p, q);
+  if(fam == 3) return fKnot(dir, seed, p, q);
+  if(fam == 4) return fRose(dir, seed, p, q);
+  if(fam == 5) return fCurtain(dir, seed, p, q);
+  if(fam == 6) return fLissa(dir, seed, p, q);
+  if(fam == 7) return fSuper(dir, seed, p, q);
+  return fShell(dir, seed, p, q);
 }
 
 Form formBlend(vec3 dir, vec4 seed){
-  // Uniform branch: no divergence, and the cost of computing both forms
-  // is only paid during the short cross-fade between designs.
-  if(uMorph <= 0.002) return formOf(uModeA, dir, seed);
-  if(uMorph >= 0.998) return formOf(uModeB, dir, seed);
-  Form a = formOf(uModeA, dir, seed);
-  Form b = formOf(uModeB, dir, seed);
+  if(uMorph <= 0.002) return formOf(uFamA, dir, seed, uPA0, uPA1);
+  if(uMorph >= 0.998) return formOf(uFamB, dir, seed, uPB0, uPB1);
+  Form a = formOf(uFamA, dir, seed, uPA0, uPA1);
+  Form b = formOf(uFamB, dir, seed, uPB0, uPB1);
   float k = uMorph * uMorph * (3.0 - 2.0 * uMorph);
   // Stagger each particle slightly so the change sweeps through the field
   // instead of every point snapping at once.

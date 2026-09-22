@@ -150,6 +150,113 @@ el.gain.addEventListener('input', () => {
   store.set('intensity', field.intensity);
 });
 
+/* ── popover menu ─────────────────────────────────────────────
+   Cycling is fine for five colours and unusable for twenty-one
+   pieces, so the dock buttons open a list instead. One component
+   serves all three: anchored above its button, clamped to the
+   viewport, and closed by a pick, an outside click or Escape. */
+
+let openMenuEl = null, menuAnchor = null;
+
+function closeMenu(){
+  if(!openMenuEl) return;
+  openMenuEl.remove();
+  openMenuEl = null;
+  menuAnchor?.setAttribute('aria-expanded', 'false');
+  menuAnchor = null;
+}
+
+/**
+ * @param anchor  the dock button the list belongs to
+ * @param items   [{ id, name, blurb, group, swatch }]
+ * @param current id of the selected item
+ * @param onPick  called with the chosen id
+ */
+function openMenu(anchor, items, current, onPick){
+  const reopening = menuAnchor === anchor;
+  closeMenu();
+  if(reopening) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+
+  // The caret belongs to the frame, not the list: inside a scrolling box it
+  // would slide up the middle of the options as you scroll.
+  const list = document.createElement('div');
+  list.className = 'menu__list';
+  list.setAttribute('role', 'menu');
+  menu.appendChild(list);
+
+  let lastGroup = null;
+  for(const it of items){
+    if(it.group && it.group !== lastGroup){
+      lastGroup = it.group;
+      const h = document.createElement('div');
+      h.className = 'menu__group';
+      h.textContent = it.group;
+      list.appendChild(h);
+    }
+
+    const b = document.createElement('button');
+    b.className = 'menu__item' + (it.id === current ? ' is-on' : '');
+    b.setAttribute('role', 'menuitemradio');
+    b.setAttribute('aria-checked', String(it.id === current));
+
+    const tick = document.createElement('span');
+    tick.className = 'menu__tick';
+    tick.setAttribute('aria-hidden', 'true');
+
+    // A colour gets its own column; stacking it under the check made the
+    // selected row unreadable.
+    let sw = null;
+    if(it.swatch){
+      sw = document.createElement('span');
+      sw.className = 'menu__sw';
+      sw.setAttribute('aria-hidden', 'true');
+      sw.style.setProperty('--sw', it.swatch);
+    }
+
+    const txt = document.createElement('span');
+    txt.className = 'menu__txt';
+    const nm = document.createElement('b');
+    nm.textContent = it.name;
+    txt.appendChild(nm);
+    if(it.blurb){
+      const d = document.createElement('i');
+      d.textContent = it.blurb;
+      txt.appendChild(d);
+    }
+
+    b.append(tick, ...(sw ? [sw] : []), txt);
+    b.addEventListener('click', () => { closeMenu(); onPick(it.id); });
+    list.appendChild(b);
+  }
+
+  document.body.appendChild(menu);
+  openMenuEl = menu;
+  menuAnchor = anchor;
+  anchor.setAttribute('aria-expanded', 'true');
+
+  // Anchor above the button, centred on it, clamped inside the viewport.
+  const a = anchor.getBoundingClientRect();
+  const w = menu.offsetWidth;
+  const left = Math.min(Math.max(12, a.left + a.width / 2 - w / 2),
+                        window.innerWidth - w - 12);
+  menu.style.left = left + 'px';
+  menu.style.bottom = (window.innerHeight - a.top + 10) + 'px';
+  menu.style.setProperty('--caret', (a.left + a.width / 2 - left) + 'px');
+
+  const sel = list.querySelector('.is-on');
+  if(sel) list.scrollTop = sel.offsetTop - list.clientHeight / 2 + sel.offsetHeight / 2;
+  showChrome();
+}
+
+document.addEventListener('pointerdown', e => {
+  if(openMenuEl && !openMenuEl.contains(e.target) && !menuAnchor?.contains(e.target))
+    closeMenu();
+}, true);
+window.addEventListener('resize', closeMenu);
+
 /* ── particle design ─────────────────────────────────────── */
 
 function applyMode(i, announce){
@@ -291,6 +398,7 @@ function closeGate(){
   kick();
 }
 function openGate(){
+  closeMenu();
   gateOpen = true;
   document.body.classList.add('is-gate');
   el.gate.hidden = false;
@@ -353,7 +461,7 @@ function showChrome(){
   hideAt = performance.now() + HIDE_AFTER;
 }
 function tickChrome(now){
-  if(manualHide || gateOpen) return;
+  if(manualHide || gateOpen || openMenuEl) return;
   if(now > hideAt) document.body.classList.add('is-hidden-ui');
 }
 ['pointermove','pointerdown','wheel','keydown','touchstart'].forEach(evt =>
@@ -430,9 +538,34 @@ window.addEventListener('drop', e => {
 
 /* ── buttons ─────────────────────────────────────────────── */
 
-el.btnForm.addEventListener('click', () => applyMode(field.modeB + 1, true));
-el.btnScene.addEventListener('click', () => applyScene(nextScene(), true));
-el.btnPalette.addEventListener('click', () => applyPalette(field.paletteIndex + 1, true));
+el.btnForm.addEventListener('click', () => {
+  openMenu(el.btnForm,
+    MODES.map(m => ({ id:m.id, name:m.name, blurb:m.blurb, group:m.group })),
+    MODES[field.modeB].id,
+    id => applyMode(MODES.findIndex(m => m.id === id), false));
+});
+
+el.btnScene.addEventListener('click', () => {
+  // Grouping is derived from what the piece actually uses, so a new
+  // entry lands in the right section without being labelled by hand.
+  const groupOf = sc =>
+      sc.prog                      ? 'Uplifting'
+    : sc.drops || sc.noiseGain > .06 ? 'Texture'
+    : sc.calm && !sc.drums         ? 'Calm'
+    : sc.calm                      ? 'Calm'
+    :                                'Rhythmic';
+  openMenu(el.btnScene,
+    SCENES.map(sc => ({ id:sc.id, name:sc.name, blurb:sc.blurb, group:groupOf(sc) })),
+    audio.sceneId,
+    id => applyScene(id, false));
+});
+
+el.btnPalette.addEventListener('click', () => {
+  openMenu(el.btnPalette,
+    PALETTES.map(p => ({ id:p.id, name:p.name, swatch:p.stops[2] })),
+    PALETTES[field.paletteIndex].id,
+    id => applyPalette(PALETTES.findIndex(p => p.id === id), false));
+});
 el.btnQuality.addEventListener('click', () => applyTier(tierIndex + 1, { toast:true }));
 el.btnFull.addEventListener('click', toggleFullscreen);
 el.btnHelp.addEventListener('click', () => { el.help.hidden = false; });
@@ -501,7 +634,8 @@ window.addEventListener('keydown', e => {
   if(!field) return;
   const k = e.key;
   if(k === 'Escape'){
-    if(!el.help.hidden) el.help.hidden = true;
+    if(openMenuEl) closeMenu();
+    else if(!el.help.hidden) el.help.hidden = true;
     else if(!gateOpen && document.fullscreenElement) document.exitFullscreen?.();
     return;
   }

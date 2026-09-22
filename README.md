@@ -53,18 +53,26 @@ Safari supports microphone and file playback; it does not implement
 
 ## The generative pieces
 
-Sixteen of them. Each is a parameter set over one engine — scale, register,
+A hundred of them. Twenty-one were written one at a time; the rest are
+composed over the same engine from the axes that actually change how a piece
+sounds — mode, register, tempo, percussion, and which harmonic engine drives
+it. Spelling out a hundred complete definitions would have buried the handful
+of numbers that differ between them, so they share a template.
+
+Each is a parameter set over one engine — scale, register,
 tempo, timbre, space, and a one-bar drum pattern on a sixteenth grid. Nothing
 is sampled and nothing loops.
 
-**Calm** — major-family modes, long decays, no hard transients:
-`Solace` · `Theta` · `Meadow` · `Bowls` · `Sunrise` · `Stillwater`
+They group into **Calm** (26), **Uplifting** (23), **Rhythmic** (30),
+**Texture** (12) and **Drone** (9). The menu derives the grouping from what a
+piece actually uses, so a new entry lands in the right section without being
+labelled by hand.
 
-**Uplifting** — major-key electronic, chord progressions that resolve upward:
-`Uplift` · `Sunroom` · `Horizon` · `Neon` · `Voltage`
+The calm set — `Solace`, `Theta`, `Meadow`, `Bowls`, `Sunrise`, `Stillwater`,
+`Hush`, `Fathom`, `Vesper` and the rest — uses major-family modes, long decays
+and no hard transients.
 
-**Rhythmic** — `Drift` · `Pulse` · `Tide` · `Bloom` · `Glass` · `Rain` ·
-`Choir` · `Circuit` · `Kinetic` · `Lattice`
+
 
 The calm set leans on consonance rather than atmosphere alone: major and
 lydian scales, perfect fifths, and roots drawn from the solfeggio set (528 Hz
@@ -123,12 +131,41 @@ the beat instead of near it.
 
 ## The particle designs
 
-| Design | What it is |
-| --- | --- |
-| **Orb** | A hollow, noise-crumpled shell. Azimuth maps to frequency, mirrored, so the form stays symmetric. Brightness is Fresnel-weighted, which densifies the silhouette and leaves the centre open. |
-| **Corona** | A radial fountain — the literal equalizer. Angle is frequency, height is amplitude. |
-| **Cymatic** | A Chladni plate. Particles relax onto the nodal lines of a standing wave by Newton iteration, which is very nearly what sand does on a vibrating sheet. |
-| **Helix** | Two strands carrying the live waveform, bridged by rungs. |
+Fifty-three of them, over eight shader families. Writing fifty-three shader
+functions would be fifty-three near-duplicates and a link time no phone would
+forgive, so each design is a family plus eight numbers — the variety lives in
+data and the shader stays small enough to compile quickly.
+
+| Family | Parameters | Designs |
+| --- | --- | --- |
+| Shell | fold, crumple, thickness, radius | Orb, Quartz, Nebula, Pulsar |
+| Corona | swirl, height, radius, spread | Corona, Geyser, Cyclone, Crown |
+| Chladni | two (n, m) pairs | Cymatic + five plates |
+| Knot | p, q, tube, turns | Torus, Trefoil, five knots, Coil, Ribbon, Braid, Helix |
+| Rose | petals, rings, lift, petalled | five mandalas, four flowers |
+| Curtain | sheets, sway, falling, width | three auroras, three rains |
+| Lissajous | a, b, c, phase | six figures |
+| Supershape | m, n1, n2, n3 | seven — star, bulb, cog, conch, seed, diatom, crystal |
+
+`q < 0` in the Knot family selects an open helix instead of a closed knot,
+which is how one function covers both a trefoil and a spring.
+
+
+
+The four originals still anchor it: **Orb**, a hollow noise-crumpled shell
+with azimuth mapped to frequency and brightness Fresnel-weighted so the
+silhouette densifies and the centre stays open; **Corona**, the literal
+equalizer, angle for frequency and height for amplitude; **Cymatic**, a
+Chladni plate where particles relax onto the nodal lines by Newton iteration,
+very nearly what sand does on a vibrating sheet; and **Helix**, two strands
+carrying the live waveform.
+
+Anything built from a curve — knots, helices, Lissajous figures — carries a
+tangent and a density correction. Where a curve runs away from the eye, a long
+stretch of it lands on very few pixels and piles into a hot blob; the shader
+divides that back out. The cross-section frame is anchored to the vertical
+axis rather than to an arbitrary up-vector, because the latter flips wherever
+the tangent passes vertical and the tube visibly twists at the flip.
 
 Switching designs cross-fades the particles between the two geometries rather
 than cutting, staggered per particle so the change sweeps through the field.
