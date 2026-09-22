@@ -447,9 +447,31 @@ the same frame the clock rolls over.
 Particle lifetimes are quantised so that `rate × 1020` is always a whole number
 of lifetimes, which keeps the birth-and-death cycle continuous across the wrap.
 
-The audio scheduler runs on a look-ahead against the audio clock rather than on
-timer callbacks, and catches up rather than flooding if the tab has been
-suspended. Every synthesised voice disconnects itself on `ended`.
+### The scheduler, and a sleeping screen
+
+The audio scheduler runs on a look-ahead against the audio clock. Getting that
+to survive a phone going to sleep took three things, and the first version of
+it stuttered badly.
+
+**The clock lives in a worker.** `setInterval` on the main thread is clamped
+hard once the page is hidden — on a phone with the screen off it can drop to
+roughly once a second or worse. A look-ahead scheduler fed that slowly
+schedules notes into the past, and you hear it as stuttering. A worker's timer
+is throttled far less and is not competing with rendering.
+
+**The look-ahead grows when hidden**, from 0.3 seconds to 3. Short while
+visible so a change of piece takes effect at once; long while hidden because
+everything between now and whenever the clock next gets to run has to already
+be committed. Measured: a 2.5-second stall while hidden leaves the scheduler
+still half a second *ahead*, so there is no discontinuity at all — where at
+0.3s it would have been two and a half seconds behind.
+
+**Catching up re-enters on a bar line.** Past 3 seconds the buffer does run
+dry, and jumping to wherever the clock happens to be lands mid-pattern and is
+audible as a lurch. Advancing by a whole number of bars keeps the phase. A
+nine-second stall jumps exactly four bars and recovers.
+
+Every synthesised voice disconnects itself on `ended`.
 
 A screen wake lock is held while a source is playing, and re-acquired whenever
 the tab becomes visible again — the browser drops it on hide.

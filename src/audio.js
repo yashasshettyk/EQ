@@ -880,6 +880,45 @@ export const SCENES = [
     calm:true, cueEvery:3, breath:8 })
 ];
 
+/* A sequencer clock that a throttled page cannot starve.
+   ------------------------------------------------------------
+   `setInterval` on the main thread is clamped hard once the page is
+   hidden — on a phone with the screen off it can drop to roughly once
+   a second, or worse. A look-ahead scheduler fed that slowly schedules
+   notes into the past and the music stutters. A worker's timer is
+   throttled far less, and it is not competing with rendering, so the
+   ticks keep arriving. Falls back to setInterval where a worker cannot
+   be created. */
+function makeClock(onTick){
+  const src = `let id = null;
+    onmessage = e => {
+      clearInterval(id); id = null;
+      if(e.data && e.data.ms) id = setInterval(() => postMessage(0), e.data.ms);
+    };`;
+  try{
+    const url = URL.createObjectURL(new Blob([src], { type:'application/javascript' }));
+    const w = new Worker(url);
+    URL.revokeObjectURL(url);
+    w.onmessage = () => onTick();
+    /* stop() only pauses. Terminating here would be a trap: restart()
+       stops the clock and then starts it again on every change of piece,
+       and a terminated worker can never tick again — the music would die
+       the first time you picked a different one. */
+    return {
+      set(ms){ try{ w.postMessage({ ms }); }catch{} },
+      stop(){ try{ w.postMessage({}); }catch{} },
+      dispose(){ try{ w.postMessage({}); w.terminate(); }catch{} }
+    };
+  }catch{
+    let id = 0;
+    return {
+      set(ms){ clearInterval(id); id = setInterval(onTick, ms); },
+      stop(){ clearInterval(id); id = 0; },
+      dispose(){ clearInterval(id); id = 0; }
+    };
+  }
+}
+
 class Ambient {
   constructor(ctx, analyseInto, monitor, sceneId){
     this.ctx = ctx; this.running = false;
@@ -920,8 +959,16 @@ class Ambient {
     this.revIn = this.rev;
 
     this.voices = [];
-    this._step = 0; this._timer = 0; this._arp = 0; this._bar = 0;
+    this._step = 0; this._arp = 0; this._bar = 0;
     this._tick = this._tick.bind(this);
+    this._clock = makeClock(this._tick);
+    /* Ticking slowly while hidden is fine as long as we schedule far
+       enough ahead to cover the gap — and it saves waking the phone up
+       twenty-five times a second for nothing. */
+    this._retune = () => {
+      if(this.running) this._clock.set(document.hidden ? 400 : 40);
+    };
+    document.addEventListener('visibilitychange', this._retune);
   }
 
   setScene(id, silent){
@@ -936,7 +983,7 @@ class Ambient {
   restart(){
     const ctx = this.ctx, t = ctx.currentTime;
     const wasRunning = this.running;
-    this.running = false; clearInterval(this._timer);
+    this.running = false; this._clock.stop();
     ramp(this.out.gain, 0.0001, t, 0.6);
     setTimeout(() => {
       this._teardownVoices();
@@ -1045,7 +1092,7 @@ class Ambient {
 
     this.running = true;
     this._next = ctx.currentTime + 0.25;
-    this._timer = setInterval(this._tick, 40);
+    this._clock.set(document.hidden ? 400 : 40);
     this._tick();
   }
 
@@ -1054,12 +1101,25 @@ class Ambient {
   _tick(){
     if(!this.running) return;
     const ctx = this.ctx, s = this.scene;
-    const horizon = ctx.currentTime + 0.30;
+
+    /* How far ahead to commit. Short while visible, so a change of piece
+       takes effect straight away; long while hidden, because the clock
+       may only get to run once every second or two and everything
+       between now and the next tick has to already be scheduled. */
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    const horizon = ctx.currentTime + (hidden ? 3.0 : 0.30);
     let guard = 0;
-    while(this._next < horizon && guard++ < 96){
-      // A long-suspended tab can leave _next far behind; catch it up
-      // rather than scheduling thousands of notes in the past.
-      if(this._next < ctx.currentTime - 1) this._next = ctx.currentTime + 0.05;
+    while(this._next < horizon && guard++ < 400){
+      /* If we fell behind anyway, re-enter on a bar line rather than
+         wherever the clock happens to be. Jumping to `now` lands
+         mid-pattern and is audible as a lurch; this stays in phase. */
+      if(this._next < ctx.currentTime - 0.25){
+        const bar = s.step * 16;
+        const behind = (ctx.currentTime + 0.06) - this._next;
+        const bars = Math.ceil(behind / bar);
+        this._next += bars * bar;
+        this._step += bars * 16;
+      }
       const n = this._step, t = this._next;
 
       this.drums(n, t);
@@ -1473,7 +1533,7 @@ class Ambient {
   }
 
   suspend(){
-    this.running = false; clearInterval(this._timer);
+    this.running = false; this._clock.stop();
     ramp(this.out.gain, 0.0001, this.ctx.currentTime, 0.5);
   }
   resume(){
@@ -1481,10 +1541,12 @@ class Ambient {
     this.running = true;
     ramp(this.out.gain, 0.9, this.ctx.currentTime, 1.2);
     this._next = this.ctx.currentTime + 0.2;
-    this._timer = setInterval(this._tick, 40);
+    this._clock.set(document.hidden ? 400 : 40);
   }
   stop(){
-    this.running = false; clearInterval(this._timer);
+    this.running = false;
+    this._clock.dispose();
+    document.removeEventListener('visibilitychange', this._retune);
     ramp(this.out.gain, 0.0001, this.ctx.currentTime, 0.35);
     setTimeout(() => {
       this._teardownVoices();
